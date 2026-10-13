@@ -1,0 +1,10 @@
+# TTS service (Qwen3-TTS through faster-qwen3-tts) - an NVIDIA GPU with ~5 GB free, Python 3.12
+# Install torch with CUDA first, e.g.:
+#   pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+faster-qwen3-tts==0.5.3
+transformers==5.15.1      # tested; 5.18 broke loading the speech tokenizer (MimiConfig without rope_theta)
+soundfile>=0.12
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+numpy>=1.26

@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f0d1c">
+<title>flash-voice</title>
+<style>
+:root {
+  --bg: #f6f5fb; --panel: #ffffff; --ink: #1c1930; --muted: #6b6684; --line: #e3e0ef; --accent: #6d5cff;
+  --accent-ink: #fff; --user: #6d5cff; --user-ink: #fff; --glow1: #7c6cff; --glow2: #2fd3a4; --bad: #e5484d;
+  --shadow: 0 8px 28px rgba(40, 20, 90, .12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0d1c; --panel: #1a1730; --ink: #ece9fb; --muted: #9d97ba; --line: #2b2748; --accent: #9b8cff;
+    --accent-ink: #0f0d1c; --user: #3a3170; --user-ink: #fff; --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0d1c; --panel: #1a1730; --ink: #ece9fb; --muted: #9d97ba; --line: #2b2748; --accent: #9b8cff;
+  --accent-ink: #0f0d1c; --user: #3a3170; --user-ink: #fff; --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent; }
+header { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; }
+header b { font-size: 17px; letter-spacing: .01em; }
+header .sp { flex: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.ok { background: var(--glow2); }
+#status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.icon { border: 0; background: transparent; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; }
+.icon:hover { background: var(--panel); }
+.icon svg { width: 22px; height: 22px; }
+main { flex: 1; overflow-y: auto; padding: 8px 16px 16px; }
+.msgs { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.m { max-width: 88%; padding: 10px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.m.user { align-self: flex-end; background: var(--user); color: var(--user-ink); border-bottom-right-radius: 6px; }
+.m.assistant { align-self: flex-start; background: var(--panel); box-shadow: var(--shadow); border-bottom-left-radius: 6px; }
+.m.assistant pre { background: var(--bg); padding: 10px; border-radius: 10px; overflow-x: auto; white-space: pre; font-size: 13px; }
+.m.err { color: var(--bad); }
+.empty { text-align: center; color: var(--muted); margin-top: 18vh; padding: 0 16px; }
+.empty h1 { font-size: 30px; margin: 0 0 6px; color: var(--ink); }
+/* the orb: breathes while thinking, glows while speaking, follows the voice while listening */
+.stage { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 18px 16px 8px; }
+body.voice .stage { display: flex; }
+#orb { width: 120px; height: 120px; border-radius: 50%; border: 0; position: relative;
+  background: radial-gradient(circle at 35% 30%, #fff8 0 8%, transparent 9%), radial-gradient(circle at 50% 55%, var(--glow1), #2a1f6e 70%);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--glow1) 55%, transparent); transition: transform .08s; }
+#orb svg { width: 46px; height: 46px; color: #fff; position: absolute; inset: 0; margin: auto; }
+.v-thinking #orb { animation: breathe 1.6s ease-in-out infinite; }
+.v-speaking #orb { box-shadow: 0 0 60px color-mix(in srgb, var(--glow2) 70%, transparent);
+  background: radial-gradient(circle at 35% 30%, #fff8 0 8%, transparent 9%), radial-gradient(circle at 50% 55%, var(--glow2), #0e5d4a 70%); }
+@keyframes breathe { 50% { transform: scale(.92); opacity: .8; } }
+@media (prefers-reduced-motion: reduce) { .v-thinking #orb { animation: none; } }
+#vs { font-weight: 600; } #vh { font-size: 13px; color: var(--muted); min-height: 1.2em; text-align: center; }
+footer { padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
+.bar { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; background: var(--panel);
+  border-radius: 26px; padding: 6px 6px 6px 16px; box-shadow: var(--shadow); }
+textarea { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit;
+  resize: none; max-height: 140px; padding: 9px 0; }
+.round { width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; flex: none; }
+.round svg { width: 22px; height: 22px; }
+#mic { background: var(--accent); color: var(--accent-ink); }
+body.voice #mic { background: var(--bad); color: #fff; }
+#send { background: var(--bg); }
+dialog { border: 0; border-radius: 18px; background: var(--panel); color: var(--ink); width: min(420px, calc(100vw - 32px));
+  box-shadow: var(--shadow); padding: 18px; }
+dialog::backdrop { background: #0006; }
+dialog h3 { margin: 0 0 12px; }
+dialog label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0;
+  border-top: 1px solid var(--line); }
+dialog select, dialog input[type=password] { font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: inherit; max-width: 60%; }
+dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+dialog .btn { border: 1px solid var(--line); background: var(--bg); padding: 8px 14px; border-radius: 12px; }
+dialog .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.small { font-size: 13px; color: var(--muted); }
+#toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  padding: 8px 14px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  max-width: calc(100vw - 32px); }
+#toast.on { opacity: .92; }
+</style>
+</head>
+<body>
+<header>
+  <b>⚡ flash-voice</b><span class="sp"></span>
+  <span id="status"><span class="dot" id="sdot"></span><span id="stext"></span></span>
+  <button class="icon" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+</header>
+<main id="scroll"><div class="msgs" id="msgs"></div></main>
+<div class="stage" id="stage">
+  <button id="orb" aria-label="Interrupt"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></button>
+  <div id="vs"></div><div id="vh"></div>
+</div>
+<footer>
+  <div class="bar">
+    <textarea id="input" rows="1" placeholder="Type, or tap the microphone"></textarea>
+    <button class="round" id="send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    <button class="round" id="mic" aria-label="Voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+  </div>
+</footer>
+<dialog id="settings">
+  <h3 data-t="settings">Settings</h3>
+  <label><span data-t="voice">Voice</span><select id="voice-sel"></select></label>
+  <label><span data-t="barge">Interrupt by voice</span><input type="checkbox" id="duplex-on"></label>
+  <label><span data-t="theme">Theme</span><select id="theme-sel"><option value="">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <p class="small" id="about"></p>
+  <div class="row"><button class="btn" id="clear" data-t="clear">Clear conversation</button><button class="btn primary" id="close-set">OK</button></div>
+</dialog>
+<dialog id="login">
+  <h3 data-t="login">Password</h3>
+  <input type="password" id="pw" autocomplete="current-password" style="width:100%;font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:inherit">
+  <p class="small" id="login-err"></p>
+  <div class="row"><button class="btn primary" id="login-go">OK</button></div>
+</dialog>
+<dialog id="https-help"><h3 id="https-t"></h3><p id="https-b"></p><p class="small" id="https-how"></p>
+  <div class="row"><button class="btn primary" onclick="this.closest('dialog').close()">OK</button></div></dialog>
+<div id="toast"></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const DE = (navigator.language || "en").toLowerCase().startsWith("de");
+const T = DE ? {
+  settings: "Einstellungen", voice: "Stimme", barge: "Ins Wort fallen", theme: "Aussehen", clear: "Gespräch löschen",
+  login: "Passwort", type: "Schreiben – oder aufs Mikrofon tippen", yourTurn: "Du bist dran", speakNow: "Sprich einfach – ich höre zu.",
+  hearing: "Ich höre zu …", moment: "Moment …", speaking: "Ich spreche", tapStop: "Antippen zum Unterbrechen",
+  hello: "Hallo!", hint: "Tippe aufs Mikrofon und rede los – du kannst mir jederzeit ins Wort fallen.",
+  noMic: "Kein Mikrofon (die Seite braucht https oder localhost)", micDead: "Mikrofon liefert nichts – bitte neu starten",
+  idle: "Sprachmodus beendet (Stille)", earGone: "Verbindung zum Ohr weg – bitte neu starten", wrong: "Falsches Passwort",
+  noEar: "Ohr nicht erreichbar – Server läuft?", ready: "bereit", off: "Server weg",
+  micDenied: "Mikrofon nicht erlaubt – im Browser links neben der Adresse (Schloss/ⓘ) das Mikrofon für diese Seite erlauben",
+  micNone: "Kein Mikrofon gefunden – ist eines angesteckt und in Windows/macOS als Eingabegerät gewählt?",
+  micBusy: "Das Mikrofon ist belegt – ein anderes Programm (Teams, Zoom, ein anderer Tab) nutzt es gerade",
+  micOther: "Mikrofon ging nicht",
+  httpsT: "Das Mikrofon braucht https",
+  httpsB: "Browser geben das Mikrofon nur über https frei – oder auf http://127.0.0.1 am selben Rechner. Diese Seite ist über {url} offen, darum bleibt das Mikrofon aus. Schreiben geht trotzdem.",
+  httpsHow: "Am selben Rechner: http://127.0.0.1:{port}/ öffnen. Am Handy: Tailscale (tailscale serve --https=8443 http://127.0.0.1:{port}) oder FV_CERT=self + FV_PASSWORD in der .env – siehe README „Das Mikrofon braucht https“."
+} : {
+  settings: "Settings", voice: "Voice", barge: "Interrupt by voice", theme: "Theme", clear: "Clear conversation",
+  login: "Password", type: "Type – or tap the microphone", yourTurn: "Your turn", speakNow: "Just talk – I'm listening.",
+  hearing: "Listening …", moment: "One moment …", speaking: "Speaking", tapStop: "Tap to interrupt",
+  hello: "Hi!", hint: "Tap the microphone and start talking – you can interrupt me any time.",
+  noMic: "No microphone (the page needs https or localhost)", micDead: "The microphone gives nothing – please restart",
+  idle: "Voice mode ended (silence)", earGone: "Lost the connection to the ear – please restart", wrong: "Wrong password",
+  noEar: "The ear is not reachable – is the server running?", ready: "ready", off: "server gone",
+  micDenied: "Microphone not allowed – allow it for this page (lock / ⓘ left of the address)",
+  micNone: "No microphone found – is one plugged in and chosen as the input device?",
+  micBusy: "The microphone is busy – another program (Teams, Zoom, another tab) is using it",
+  micOther: "The microphone did not start",
+  httpsT: "The microphone needs https",
+  httpsB: "Browsers give a page the microphone only over https – or on http://127.0.0.1 on the same computer. This page is open at {url}, so the microphone stays off. Typing still works.",
+  httpsHow: "Same computer: open http://127.0.0.1:{port}/. Phone: Tailscale (tailscale serve --https=8443 http://127.0.0.1:{port}) or FV_CERT=self + FV_PASSWORD in .env – see the README, “The microphone needs https”."
+};
+document.querySelectorAll("[data-t]").forEach(el => { if (T[el.dataset.t]) el.textContent = T[el.dataset.t]; });
+$("input").placeholder = T.type;
+function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove("on"), 2800); }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+function md(t) {   // just enough: code blocks and line breaks (answers are meant to be spoken)
+  const F = "`".repeat(3);
+  return esc(t).split(F).map((p, i) => i % 2 ? `<pre>${p.replace(/^\w*\n/, "")}</pre>` : p.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")).join("");
+}
+const theme = () => { const v = store.get("fv-theme", ""); if (v) document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; };
+theme();
+
+// ---------------------------------------------------------------- the conversation (kept in this browser only)
+let messages = []; try { messages = JSON.parse(store.get("fv-msgs", "[]")) || []; } catch { messages = []; }
+let voiceName = store.get("fv-voice", ""), live = null;
+function save() { store.set("fv-msgs", JSON.stringify(messages.slice(-60))); }
+function render() {
+  $("msgs").innerHTML = messages.length ? messages.map(m => `<div class="m ${m.role}${m.error ? " err" : ""}">${m.role === "assistant" ? md(m.content || m.error || "…") : esc(m.content)}</div>`).join("")
+    : `<div class="empty"><h1>${T.hello}</h1><p>${micPossible() ? T.hint : "⚠️ " + T.httpsT + " – " + T.httpsB.replace("{url}", esc(location.origin))}</p></div>`;
+  const s = $("scroll"); s.scrollTop = s.scrollHeight;
+}
+function updateLive() {
+  const els = $("msgs").querySelectorAll(".m.assistant"); const el = els[els.length - 1];
+  if (el && live) { el.innerHTML = md(live.content || "…"); const s = $("scroll"); if (s.scrollHeight - s.scrollTop - s.clientHeight < 200) s.scrollTop = s.scrollHeight; }
+}
+
+// ---------------------------------------------------------------- one turn: the answer streams in, sentences are spoken
+let busy = false, abortCtl = null;
+async function turn(text, {speak = false, lang = ""} = {}) {
+  if (!text.trim()) return "nothing";
+  busy = true; abortCtl = new AbortController();
+  messages.push({role: "user", content: text}); live = {role: "assistant", content: ""}; messages.push(live); render();
+  const hist = messages.filter(m => m !== live && !m.error).map(m => ({role: m.role, content: m.content}));
+  let res = "ok";
+  try {
+    const r = await fetch("/api/turn", {method: "POST", headers: {"Content-Type": "application/json"}, signal: abortCtl.signal,
+      body: JSON.stringify({messages: hist, voice: voiceName, lang, speak})});
+    if (r.status === 401) { askLogin(); throw new Error("login"); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const {value, done} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream: true}); let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1); if (!line.trim()) continue;
+        const m = JSON.parse(line);
+        if (m.t === "delta") { live.content += m.text; updateLive(); }
+        else if (m.t === "audio" && vOn) { if (!m.cont) { earSaid(m.text); vstate("speaking", T.speaking, T.tapStop); } enqueueAudio(m.audio, m.cont); }
+        else if (m.t === "done") live.content = m.text;
+        else if (m.t === "error") { live.error = m.text; res = "fail"; }
+      }
+    }
+  } catch (e) { if (e.name !== "AbortError" && e.message !== "login") { live.error = live.error || String(e.message || e); res = "fail"; } }
+  if (!live.content && !live.error) messages.pop();
+  live = null; busy = false; save(); render();
+  return res;
+}
+function stopTurn() { if (abortCtl) abortCtl.abort(); }
+$("send").onclick = () => { const t = $("input").value.trim(); if (!t || busy) return; $("input").value = ""; grow();
+  if (vOn) dTurn(t, ""); else turn(t); };
+$("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) { e.preventDefault(); $("send").onclick(); } });
+const grow = () => { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(140, t.scrollHeight) + "px"; };
+$("input").addEventListener("input", grow);
+
+// ---------------------------------------------------------------- the voice mode
+// Tricks from a phone app that is used every day: a fresh audio context per session (after the screen was off, iOS
+// reports the old one as running but its microphone gives silence), pieces decoded strictly in order with a time
+// limit (one piece Safari never finishes would silence everything after it), a dead microphone ends cleanly.
+let ctx = null, stream = null, micSrc = null, analyser = null, vOn = false, vState = "", wakeLock = null;
+let out = null, playChain = Promise.resolve(), playGen = 0, sched = [], playUntil = 0, playEnd = 0;
+let voiceGen = 0, listenStart = 0, earSpoke = 0, zeroSince = 0;
+const IDLE_END_MS = 120000;
+function vstate(s, title, hint) {
+  vState = s; $("stage").className = "stage v-" + s;
+  if (title !== undefined) $("vs").textContent = title;
+  if (hint !== undefined) $("vh").textContent = hint;
+  // with interrupting switched off the ear is deaf while the assistant has its turn
+  earSet(s === "listening" ? "listening" : duplexWanted() ? (s === "speaking" ? "speaking" : "thinking") : "off");
+}
+function output() { if (!out || out.context !== ctx) { out = ctx.createGain(); out.connect(ctx.destination); } return out; }
+function decode(buf) {
+  return Promise.race([
+    new Promise((res, rej) => { const p = ctx.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("decode timeout")), 2000))]);
+}
+function enqueueAudio(b64, cont) {
+  const gen = playGen;
+  playChain = playChain.then(async () => {
+    if (!vOn || !ctx || gen !== playGen) return;
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    let audio; try { audio = await decode(bytes.buffer); } catch { return; }
+    if (gen !== playGen) return;
+    const src = ctx.createBufferSource(); src.buffer = audio; src.connect(output());
+    const at = cont ? Math.max(ctx.currentTime + 0.02, playEnd) : Math.max(ctx.currentTime + 0.05, playUntil);
+    src.start(at); playEnd = Math.max(playEnd, at + audio.duration); playUntil = Math.max(playUntil, playEnd + 0.1);
+    sched.push(src); src.onended = () => { sched = sched.filter(s => s !== src); };
+  });
+  return playChain;
+}
+function stopPlayback() { playGen++; for (const s of sched) { try { s.stop(); } catch {} } sched = []; playUntil = 0; playEnd = 0; playChain = Promise.resolve(); }
+async function waitPlayback() {
+  await playChain;
+  await new Promise(res => { const chk = () => (!vOn || !ctx || ctx.currentTime >= playUntil - 0.05) ? res() : setTimeout(chk, 100); chk(); });
+  if (vOn) await new Promise(r => setTimeout(r, 300));
+}
+function duck(on) { if (!ctx) return; const g = output().gain; g.cancelScheduledValues(ctx.currentTime); g.setTargetAtTime(on ? 0.25 : 1, ctx.currentTime, 0.04); }
+
+// ---------------------------------------------------------------- 👂 the ear: the microphone to the server, all the time
+let ear = null, earMode = "", capNode = null, capSink = null;
+const duplexWanted = () => store.get("fv-duplex", "1") === "1";
+const DOWN_WORKLET = `class Down extends AudioWorkletProcessor {
+  constructor() { super(); this.r = sampleRate / 16000; this.next = this.r; this.i = 0; this.sum = 0; this.cnt = 0; this.out = new Int16Array(512); this.n = 0; }
+  process(inputs) {
+    const x = inputs[0] && inputs[0][0]; if (!x) return true;
+    for (let k = 0; k < x.length; k++) {
+      this.sum += x[k]; this.cnt++; this.i++;
+      if (this.i >= this.next) {
+        this.out[this.n++] = Math.max(-1, Math.min(1, this.sum / this.cnt)) * 32767;
+        this.sum = 0; this.cnt = 0; this.next += this.r;
+        if (this.n === 512) { this.port.postMessage(this.out.buffer.slice(0)); this.n = 0; }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("down16k", Down);`;
+function earSend(o) { if (ear && ear.readyState === 1) ear.send(JSON.stringify(o)); }
+function earSet(mode) { if (ear && mode !== earMode) { earMode = mode; earSend({t: "mode", mode}); } }
+function earSaid(text) { if (text) earSend({t: "said", text}); }
+async function captureOn() {   // 16 kHz 16-bit pieces of 32 ms
+  const send = buf => { if (ear && ear.readyState === 1 && ear.bufferedAmount < 256000) ear.send(buf); };
+  capSink = ctx.createGain(); capSink.gain.value = 0; capSink.connect(ctx.destination);   // keeps the node running
+  try {
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([DOWN_WORKLET], {type: "application/javascript"})));
+    capNode = new AudioWorkletNode(ctx, "down16k"); capNode.port.onmessage = e => send(e.data);
+  } catch {   // an older browser: the same in the page
+    const r = ctx.sampleRate / 16000; let next = r, i = 0, sum = 0, cnt = 0, buf = new Int16Array(512), n = 0;
+    capNode = ctx.createScriptProcessor(2048, 1, 1);
+    capNode.onaudioprocess = ev => { const x = ev.inputBuffer.getChannelData(0);
+      for (let k = 0; k < x.length; k++) { sum += x[k]; cnt++; i++;
+        if (i >= next) { buf[n++] = Math.max(-1, Math.min(1, sum / cnt)) * 32767; sum = 0; cnt = 0; next += r; if (n === 512) { send(buf.buffer.slice(0)); n = 0; } } } };
+  }
+  micSrc.connect(capNode); capNode.connect(capSink);
+}
+function earOpen() {
+  return new Promise(res => {
+    let done = false; const fin = ok => { if (!done) { done = true; res(ok); } };
+    try { ear = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/ear"); } catch { return fin(false); }
+    ear.binaryType = "arraybuffer";
+    ear.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m.e === "ready") fin(true); else earEvent(m); };
+    ear.onerror = () => fin(false);
+    ear.onclose = () => { fin(false); if (vOn) { endVoice(); toast(T.earGone); } };
+    setTimeout(() => fin(false), 5000);
+  });
+}
+function earEvent(m) {
+  if (!vOn) return;
+  if (m.e === "speech") { earSpoke = performance.now(); if (vState === "listening") vstate("listening", T.hearing, ""); }
+  else if (m.e === "reset") { if (vState === "listening") vstate("listening", T.yourTurn, T.speakNow); }
+  else if (m.e === "end") { earSpoke = performance.now(); dTurn(m.text, m.lang); }
+  else if (m.e === "duck") duck(true);
+  else if (m.e === "resume") duck(false);
+  else if (m.e === "barge") {   // an interruption: stop, listen on (the ear keeps what was said from its first syllable)
+    voiceGen++; if (busy) stopTurn(); stopPlayback(); duck(false);
+    earMode = "listening"; vstate("listening", T.hearing, ""); earSpoke = performance.now();
+  }
+}
+async function dTurn(text, lang) {
+  const gen = ++voiceGen;
+  if (busy) stopTurn();
+  vstate("thinking", T.moment, "");
+  const res = await turn(text, {speak: true, lang});
+  if (gen !== voiceGen || !vOn) return;   // interrupted meanwhile: the ear is already listening
+  if (res !== "nothing") await waitPlayback();
+  if (vOn && gen === voiceGen) dListen();
+}
+function dListen() { listenStart = performance.now(); vstate("listening", T.yourTurn, T.speakNow); }
+// 👋 "Hi!" the moment the voice mode starts: made once per voice, kept on this device
+const greet = {};
+async function loadGreeting(v) {
+  const c = store.get("fv-greet-" + v, ""); if (c) { greet[v] = c; return; }
+  try { const j = await (await fetch(`/api/greeting?voice=${encodeURIComponent(v)}`)).json(); if (j.audio) { greet[v] = j.audio; store.set("fv-greet-" + v, j.audio); } } catch {}
+}
+function micError(e) {   // the real reason - "needs https" only when that is it
+  const n = (e && e.name) || "";
+  if (!micPossible()) return T.noMic;
+  if (n === "NotAllowedError" || n === "SecurityError") return T.micDenied;
+  if (n === "NotFoundError" || n === "OverconstrainedError") return T.micNone;
+  if (n === "NotReadableError" || n === "AbortError") return T.micBusy;
+  return `${T.micOther} (${n || (e && e.message) || "?"})`;
+}
+const micPossible = () => window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+function httpsHelp() {
+  const fill = t => t.replace("{url}", location.origin).replaceAll("{port}", location.port || "8099");
+  $("https-t").textContent = T.httpsT; $("https-b").textContent = fill(T.httpsB); $("https-how").textContent = fill(T.httpsHow);
+  $("https-help").showModal();
+}
+async function startVoice() {
+  if (vOn) return endVoice();
+  if (!micPossible()) return httpsHelp();
+  if (ctx) { try { ctx.close(); } catch {} ctx = null; out = null; }
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ready = Promise.race([ctx.resume().catch(() => {}), new Promise(r => setTimeout(r, 1000))]);
+    stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}});
+    await ready; if (ctx.state !== "running") await ctx.resume().catch(() => {});
+  } catch (e) { micOff(); toast(micError(e)); return; }
+  stream.getAudioTracks().forEach(t => { t.onended = () => { if (vOn) { endVoice(); toast(T.micDead); } }; });
+  micSrc = ctx.createMediaStreamSource(stream); analyser = ctx.createAnalyser(); analyser.fftSize = 1024; micSrc.connect(analyser);
+  vOn = true; zeroSince = 0; document.body.classList.add("voice");
+  if (greet[voiceName]) { enqueueAudio(greet[voiceName]); }   // 👋 right away, while the ear connects
+  if (!await earOpen()) { endVoice(); toast(T.noEar); return; }
+  earSaid("Hi"); earMode = "";
+  try { await captureOn(); } catch { endVoice(); toast(T.noMic); return; }
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+  dListen(); earSpoke = performance.now(); loop();
+}
+function micOff() { try { if (micSrc) micSrc.disconnect(); } catch {} if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; micSrc = null; analyser = null; }
+function endVoice() {
+  vOn = false; voiceGen++; stopPlayback(); if (busy) stopTurn();
+  try { if (capNode) capNode.disconnect(); if (capSink) capSink.disconnect(); } catch {} capNode = null; capSink = null;
+  if (ear) { ear.onclose = null; try { ear.close(); } catch {} } ear = null; earMode = "";
+  micOff(); document.body.classList.remove("voice");
+  try { wakeLock && wakeLock.release(); } catch {} wakeLock = null;
+}
+function level() { if (!analyser) return 0; const b = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(b); let s = 0; for (const v of b) s += v * v; return Math.sqrt(s / b.length); }
+function loop() {
+  if (!vOn) return;
+  const now = performance.now(), lv = level();
+  if (lv === 0) { zeroSince = zeroSince || now; if (now - zeroSince > 4000) { endVoice(); toast(T.micDead); return; } } else zeroSince = 0;
+  $("orb").style.transform = vState === "listening" ? `scale(${1 + Math.min(lv * 5, 0.25)})` : "";
+  if (vState === "listening" && now - Math.max(listenStart, earSpoke) > IDLE_END_MS) { endVoice(); toast(T.idle); return; }
+  requestAnimationFrame(loop);
+}
+$("mic").onclick = startVoice;
+$("orb").onclick = () => { if (vState === "speaking" || vState === "thinking") { voiceGen++; if (busy) stopTurn(); stopPlayback(); duck(false); dListen(); } };
+document.addEventListener("visibilitychange", () => { if (!document.hidden && vOn && !wakeLock) navigator.wakeLock?.request("screen").then(w => wakeLock = w).catch(() => {}); });
+
+// ---------------------------------------------------------------- settings, login, status
+$("gear").onclick = () => $("settings").showModal();
+$("close-set").onclick = () => $("settings").close();
+$("clear").onclick = () => { messages = []; save(); render(); $("settings").close(); };
+$("duplex-on").checked = duplexWanted();
+$("duplex-on").onchange = e => store.set("fv-duplex", e.target.checked ? "1" : "0");
+$("theme-sel").value = store.get("fv-theme", "");
+$("theme-sel").onchange = e => { store.set("fv-theme", e.target.value); theme(); };
+$("voice-sel").onchange = e => { voiceName = e.target.value; store.set("fv-voice", voiceName); loadGreeting(voiceName); };
+function askLogin() { if (!$("login").open) $("login").showModal(); $("pw").focus(); }
+$("login-go").onclick = async () => {
+  const r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password: $("pw").value})});
+  if (r.ok) { $("login").close(); $("pw").value = ""; boot(); } else $("login-err").textContent = (await r.json().catch(() => ({}))).error || T.wrong;
+};
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") $("login-go").onclick(); });
+async function boot() {
+  let info;
+  try { info = await (await fetch("/api/info")).json(); } catch { $("stext").textContent = T.off; return; }
+  if (info.auth && !info.ok) return askLogin();
+  $("sdot").className = "dot ok"; $("stext").textContent = info.model || T.ready;
+  $("about").textContent = `LLM: ${info.model || "?"} · Clef: ${info.clef ? "✓" : "–"} · ${info.langs.join(", ")}`;
+  let list = []; try { list = await (await fetch("/api/voices")).json(); } catch {}
+  if (!list.length) list = [{id: info.voice, label: info.voice}];
+  if (!list.some(v => v.id === voiceName)) voiceName = list.some(v => v.id === info.voice) ? info.voice : list[0].id;
+  $("voice-sel").innerHTML = list.map(v => `<option value="${esc(v.id)}"${v.id === voiceName ? " selected" : ""}>${esc(v.label)}</option>`).join("");
+  loadGreeting(voiceName);
+}
+render(); boot();
+</script>
+</body>
+</html>

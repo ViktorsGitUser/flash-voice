@@ -1,0 +1,10 @@
+.env
+certs/
+voices/*
+!voices/README.md
+models/*.gguf
+__pycache__/
+*.pyc
+.venv*/
+venv*/
+*.log

@@ -1,5 +1,6 @@
 # STT service (Whisper large-v3-turbo through faster-whisper) - an NVIDIA GPU with ~1.5 GB free
 faster-whisper==1.2.1
+av==15.1.0                # faster-whisper 1.2.1 opens audio with an argument newer PyAV no longer has
 fastapi>=0.115
 uvicorn>=0.30
 python-multipart>=0.0.9

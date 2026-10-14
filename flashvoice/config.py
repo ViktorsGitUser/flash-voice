@@ -29,7 +29,7 @@ SYSTEM_PROMPT = E("FV_SYSTEM_PROMPT", "")         # empty: the built-in one (sho
 TTS_URL = E("FV_TTS_URL", "http://127.0.0.1:8086").rstrip("/")
 STT_URL = E("FV_STT_URL", "http://127.0.0.1:8087").rstrip("/")
 CLEF_URL = E("FV_CLEF_URL", "http://127.0.0.1:8088").rstrip("/")   # empty or unreachable: simple rules instead
-LANGS = tuple(x.strip() for x in E("FV_LANGS", "de,en").split(",") if x.strip())
+LANGS = tuple(x.strip() for x in E("FV_LANGS", "en,de").split(",") if x.strip())
 VOICE = E("FV_VOICE", "serena")
 # the page
 HOST = E("FV_HOST", "127.0.0.1")

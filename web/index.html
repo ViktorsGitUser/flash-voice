@@ -119,6 +119,7 @@ dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
   <h3 data-t="settings">Settings</h3>
   <label><span data-t="voice">Voice</span><select id="voice-sel"></select></label>
   <label><span data-t="barge">Interrupt by voice</span><input type="checkbox" id="duplex-on"></label>
+  <label><span data-t="uiLang">Language</span><select id="ui-sel"><option value="en">English</option><option value="de">Deutsch</option></select></label>
   <label><span data-t="theme">Theme</span><select id="theme-sel"><option value="">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
   <div class="clone" id="clone" hidden>
     <h4 data-t="ownVoice">Your own voice</h4>
@@ -151,9 +152,11 @@ const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const DE = (navigator.language || "en").toLowerCase().startsWith("de");
+// the page's language: English unless chosen otherwise in the settings (what the assistant speaks follows the person)
+const UI_LANG = store.get("fv-ui", "en"), DE = UI_LANG === "de";
+document.documentElement.lang = UI_LANG;
 const T = DE ? {
-  settings: "Einstellungen", voice: "Stimme", barge: "Ins Wort fallen", theme: "Aussehen", clear: "Gespräch löschen",
+  settings: "Einstellungen", voice: "Stimme", uiLang: "Sprache", barge: "Ins Wort fallen", theme: "Aussehen", clear: "Gespräch löschen",
   login: "Passwort", type: "Schreiben – oder aufs Mikrofon tippen", yourTurn: "Du bist dran", speakNow: "Sprich einfach – ich höre zu.",
   hearing: "Ich höre zu …", moment: "Moment …", speaking: "Ich spreche", tapStop: "Antippen zum Unterbrechen",
   hello: "Hallo!", hint: "Tippe aufs Mikrofon und rede los – du kannst mir jederzeit ins Wort fallen.",
@@ -437,6 +440,8 @@ $("clear").onclick = () => { messages = []; save(); render(); $("settings").clos
 $("duplex-on").checked = duplexWanted();
 $("duplex-on").onchange = e => store.set("fv-duplex", e.target.checked ? "1" : "0");
 $("theme-sel").value = store.get("fv-theme", "");
+$("ui-sel").value = UI_LANG;
+$("ui-sel").onchange = e => { store.set("fv-ui", e.target.value); location.reload(); };
 $("theme-sel").onchange = e => { store.set("fv-theme", e.target.value); theme(); };
 $("voice-sel").onchange = e => { voiceName = e.target.value; store.set("fv-voice", voiceName); loadGreeting(voiceName); };
 function askLogin() { if (!$("login").open) $("login").showModal(); $("pw").focus(); }

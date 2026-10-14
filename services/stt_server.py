@@ -30,7 +30,7 @@ PORT = int(os.environ.get("FV_STT_PORT", "8087"))
 HOST = os.environ.get("FV_STT_HOST", "127.0.0.1")
 MODEL = os.environ.get("FV_STT_MODEL", "large-v3-turbo")
 COMPUTE = os.environ.get("FV_STT_COMPUTE", "int8_float16")
-LANGS = tuple(os.environ.get("FV_STT_LANGS", "de,en").split(","))
+LANGS = tuple(os.environ.get("FV_STT_LANGS", "en,de").split(","))
 
 print(f"[stt] loading Whisper {MODEL} ({COMPUTE}) ...", flush=True)
 _stt = WhisperModel(MODEL, device=os.environ.get("FV_STT_DEVICE", "cuda"), compute_type=COMPUTE, cpu_threads=1, num_workers=1)

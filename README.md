@@ -113,7 +113,7 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
 | `FV_LLM_EXTRA` | – | JSON added to each request, e.g. `{"temperature":0.7}`; thinking models: switch thinking off for speed (e.g. Qwen3 `{"chat_template_kwargs":{"enable_thinking":false}}`) |
 | `FV_SYSTEM_PROMPT` | built-in | `{date}` = today |
 | `FV_TTS_URL` / `FV_STT_URL` / `FV_CLEF_URL` | `:8086` / `:8087` / `:8088` | Clef empty = rules only |
-| `FV_LANGS` | `de,en` | what Whisper chooses from; Clef's questions follow the language heard |
+| `FV_LANGS` | `en,de` | what Whisper chooses from; Clef's questions follow the language heard |
 | `FV_VOICE` | `serena` | |
 | `FV_HOST` / `FV_PORT` | `127.0.0.1` / `8099` | |
 | `FV_PASSWORD` | – | set it when other devices can reach the page |

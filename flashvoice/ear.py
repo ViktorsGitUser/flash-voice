@@ -267,6 +267,8 @@ class Ear:
                          f"(Whisper {t1 - t0:.2f} s, Clef {time.time() - t1:.2f} s)")
         except Exception as e:
             self.log(f"pause check: {e}")
+            if gen == self.gen:   # no second try at every frame: the end of the turn comes by the pause alone
+                self.checked = (n, None, self.lang if hasattr(self, "lang") else "de", None)
         finally:
             if gen == self.gen:
                 self.task = None
@@ -277,7 +279,7 @@ class Ear:
         frames, chk, last = self.utt, self.checked, self.last_voice
         self.reset()
         self.mode = "thinking"   # until the page says otherwise
-        if chk and chk[0] >= last:   # nothing said since the pause check: its text
+        if chk and chk[1] is not None and chk[0] >= last:   # nothing said since the pause check: its text
             text, lang = chk[1], chk[2]
         else:
             try:

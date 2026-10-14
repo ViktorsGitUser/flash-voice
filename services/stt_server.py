@@ -3,7 +3,8 @@
 POST /api/stt  form: audio (any format ffmpeg/PyAV reads), langs ("de,en" - Whisper picks the likeliest of these;
                short clips are easily misdetected otherwise), fast ("1": greedy, for the ear's quick checks)
                -> {"text", "lang"}
-GET  /health
+POST /api/words (also /api/woerter)  form: audio, lang, text (optional hint) -> {"words": [{"w", "start", "end"}]}
+GET  /health (also /api/health)
 
 Run:  python services/stt_server.py     (FV_STT_PORT 8087, FV_STT_HOST 127.0.0.1, FV_STT_MODEL large-v3-turbo,
       FV_STT_COMPUTE int8_float16 - about half the memory of float16, practically the same recognition; ~1.5 GB)
@@ -60,9 +61,24 @@ def stt(audio: UploadFile = File(...), langs: str = Form(""), fast: str = Form("
     return {"text": text, "lang": lang}
 
 
+@app.post("/api/woerter")
+@app.post("/api/words")
+def words(audio: UploadFile = File(...), lang: str = Form("de"), text: str = Form("")):
+    """When each word is said (word-by-word subtitles): -> {"words": [{"w", "start", "end"}]}. `text`: what is said,
+    if known (a hint: names and brands come out right)."""
+    data = decode_audio(io.BytesIO(audio.file.read()), sampling_rate=16000)
+    with _lock:
+        segments, _ = _stt.transcribe(data, language=lang or "de", beam_size=5, word_timestamps=True,
+                                      vad_filter=False, initial_prompt=(text or None) and text[:400])
+        out = [{"w": w.word.strip(), "start": round(w.start, 3), "end": round(w.end, 3)}
+               for seg in segments for w in (seg.words or []) if w.word.strip()]
+    return {"words": out}
+
+
 @app.get("/health")
+@app.get("/api/health")
 def health():
-    return {"ok": True, "model": MODEL}
+    return {"ok": True, "model": MODEL, "compute": COMPUTE}
 
 
 if __name__ == "__main__":

@@ -119,8 +119,14 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
 | `FV_PASSWORD` | – | set it when other devices can reach the page |
 | `FV_CERT` / `FV_KEY` | – | paths, or `FV_CERT=self` |
 
-TTS service: `FV_TTS_MODEL` (default `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`; the `…-1.7B-Base` model clones voices
-from `voices/` – see [voices/README.md](voices/README.md)). STT service: `FV_STT_MODEL`, `FV_STT_COMPUTE`.
+TTS service: `FV_TTS_MODEL` (default `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`: 9 built-in voices). With the
+`…-1.7B-Base` model and `FV_VOICES=<folder>` it runs a **voice library**: every recording in the folder is a voice
+(see [voices/README.md](voices/README.md)), and the library is managed over HTTP – `POST /voices/clone` (a recording
+becomes a voice, hiss and hum filtered), `/voices/mix` (a weighted mixture of voices, saved as a speaker embedding),
+`/voices/update`, `/voices/delete`; `/speak` also takes `instruct` (a speaking style), `mix` (preview a mixture) and
+`temperature`. Labels: a voice's `name.json`, or `names.json` in the folder.
+STT service: `FV_STT_MODEL`, `FV_STT_COMPUTE`, `FV_STT_LANGS`; besides `/api/stt` it has `/api/words` – when each word
+is said, for word-by-word subtitles.
 
 ## Use it from your own app
 

@@ -57,7 +57,7 @@ body.voice .stage { display: flex; }
   background: radial-gradient(circle at 35% 30%, #fff8 0 8%, transparent 9%), radial-gradient(circle at 50% 55%, var(--glow2), #0e5d4a 70%); }
 @keyframes breathe { 50% { transform: scale(.92); opacity: .8; } }
 @media (prefers-reduced-motion: reduce) { .v-thinking #orb { animation: none; } }
-#vs { font-weight: 600; } #vh { font-size: 13px; color: var(--muted); min-height: 1.2em; text-align: center; }
+#vs { font-weight: 600; } #vh { font-size: 13px; color: var(--muted); min-height: 1.2em; text-align: center; max-width: 560px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 footer { padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
 .bar { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; background: var(--panel);
   border-radius: 26px; padding: 6px 6px 6px 16px; box-shadow: var(--shadow); }
@@ -353,6 +353,7 @@ function earOpen() {
 function earEvent(m) {
   if (!vOn) return;
   if (m.e === "speech") { earSpoke = performance.now(); if (vState === "listening") vstate("listening", T.hearing, ""); }
+  else if (m.e === "partial") { earSpoke = performance.now(); if (vState === "listening") vstate("listening", T.hearing, "“" + (m.text.length > 140 ? "…" + m.text.slice(-140) : m.text) + "”"); }
   else if (m.e === "reset") { if (vState === "listening") vstate("listening", T.yourTurn, T.speakNow); }
   else if (m.e === "end") { earSpoke = performance.now(); dTurn(m.text, m.lang); }
   else if (m.e === "duck") duck(true);

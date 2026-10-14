@@ -160,6 +160,8 @@ class Ear:
         self.task = None         # a running Whisper/Clef check
         self.barge = None        # while the assistant speaks: None, "ducked", "deciding"
         self.last_voice = 0      # index of the last frame with voice in utt
+        self.ptask = None        # a running live transcript (partial)
+        self.plast = 0.0         # when the last one started
 
     async def send(self, **k):
         try:
@@ -223,6 +225,10 @@ class Ear:
         else:
             self.silence += FRAME_MS
         if self.mode == "listening":
+            if (self.ptask is None and self.task is None and self.voiced >= 600 and self.silence < 300
+                    and time.time() - self.plast >= 1.0):
+                self.plast = time.time()
+                self.ptask = asyncio.create_task(self.partial(list(self.utt), self.gen))
             await self.listening()
         else:
             await self.speaking()
@@ -245,6 +251,18 @@ class Ear:
             limit = END_MAX_MS if self.clef_ok() else END_SURE_MS
         if self.silence >= limit and self.task is None:
             await self.finish()
+
+    async def partial(self, frames: list, gen: int):
+        """What has been said so far (Whisper's quick mode, the last 20 s) - the page shows it while the person speaks."""
+        try:
+            text, _ = await asyncio.to_thread(lambda: self.transcribe(wav_bytes(frames[-625:]), True))
+            if gen == self.gen and self.utt is not None and self.mode == "listening" and text.strip():
+                await self.send(e="partial", text=text.strip())
+        except Exception:
+            pass
+        finally:
+            if gen == self.gen:
+                self.ptask = None
 
     async def pause_check(self, n: int, gen: int):
         """At the first pause: write it down, ask Clef whether the thought is finished."""

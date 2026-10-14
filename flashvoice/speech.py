@@ -5,7 +5,7 @@ a long sentence at a natural pause near its middle - never inside a clause.
 import re
 
 # a point that ends no sentence: a date or ordinal ("der 8. Oktober"), a single letter ("z. B.", "e. g."), an abbreviation
-NO_END = re.compile(r"(?:\b\d{1,2}|\b\w|\b(?:bzw|ca|Dr|Prof|St|Nr|usw|vgl|etc|evtl|ggf|inkl|Mio|Mrd|Jh|Hr|Fr|Abb|"
+NO_END = re.compile(r"(?:\b\d{1,2}|\b\w|\b[IVX]{1,4}|\b(?:bzw|ca|Dr|Prof|St|Nr|usw|vgl|etc|evtl|ggf|inkl|Mio|Mrd|Jh|Hr|Fr|Abb|"
                     r"bspw|sog|ugs|Mr|Mrs|Ms|vs|approx|incl|no|fig))\.$", re.I)
 _END = re.compile(r"[.!?…:;](\s+)")
 FIRST_PART = re.compile(r"(.{25,}?,)(\s+)", re.S)   # the very first piece may end at a comma: heard sooner

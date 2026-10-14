@@ -79,6 +79,17 @@ dialog select, dialog input[type=password] { font: inherit; padding: 6px 8px; bo
 dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 dialog .btn { border: 1px solid var(--line); background: var(--bg); padding: 8px 14px; border-radius: 12px; }
 dialog .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+dialog .btn:disabled { opacity: .5; cursor: default; }
+dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.clone { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+.clone h4 { margin: 0 0 4px; font-size: 15px; }
+.clone textarea, .clone input[type=text] { width: 100%; font: inherit; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: inherit; margin-top: 6px; resize: vertical; }
+.clone .line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.clone .line label { border: 0; padding: 0; justify-content: flex-start; font-size: 14px; }
+.clone .line label.btn { border: 1px solid var(--line); padding: 8px 14px; font-size: 16px; }
+.clone .own { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 14px; }
+.rec-on { background: var(--bad) !important; color: #fff !important; border-color: var(--bad) !important; }
 .small { font-size: 13px; color: var(--muted); }
 #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
   padding: 8px 14px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none;
@@ -109,6 +120,19 @@ dialog .btn.primary { background: var(--accent); color: var(--accent-ink); borde
   <label><span data-t="voice">Voice</span><select id="voice-sel"></select></label>
   <label><span data-t="barge">Interrupt by voice</span><input type="checkbox" id="duplex-on"></label>
   <label><span data-t="theme">Theme</span><select id="theme-sel"><option value="">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <div class="clone" id="clone" hidden>
+    <h4 data-t="ownVoice">Your own voice</h4>
+    <p class="small" data-t="ownHint">Speak 10–20 seconds clearly (or pick a recording). The text is written down for you.</p>
+    <div class="line"><button class="btn" id="rec-btn" data-t="record">● Record</button>
+      <label class="btn" style="cursor:pointer"><span data-t="file">File …</span><input type="file" id="rec-file" accept="audio/*" hidden></label>
+      <span class="small" id="rec-state"></span></div>
+    <audio id="rec-play" controls hidden style="width:100%;margin-top:8px"></audio>
+    <textarea id="rec-text" rows="3" hidden></textarea>
+    <input type="text" id="rec-name" hidden maxlength="40">
+    <div class="line" id="rec-consent-line" hidden><label><input type="checkbox" id="rec-consent"> <span data-t="consent">This is my voice, or the person agreed.</span></label></div>
+    <div class="row" id="rec-go-line" hidden><button class="btn primary" id="rec-go" data-t="makeVoice">Create voice</button></div>
+    <div id="own-list"></div>
+  </div>
   <p class="small" id="about"></p>
   <div class="row"><button class="btn" id="clear" data-t="clear">Clear conversation</button><button class="btn primary" id="close-set">OK</button></div>
 </dialog>
@@ -136,6 +160,11 @@ const T = DE ? {
   noMic: "Kein Mikrofon (die Seite braucht https oder localhost)", micDead: "Mikrofon liefert nichts – bitte neu starten",
   idle: "Sprachmodus beendet (Stille)", earGone: "Verbindung zum Ohr weg – bitte neu starten", wrong: "Falsches Passwort",
   noEar: "Ohr nicht erreichbar – Server läuft?", ready: "bereit", off: "Server weg",
+  ownVoice: "Eigene Stimme", ownHint: "10–20 Sekunden deutlich sprechen (oder eine Aufnahme wählen). Den Text schreibt Whisper mit – bitte kurz prüfen.",
+  record: "● Aufnehmen", stop: "■ Stopp", file: "Datei …", consent: "Das ist meine Stimme, oder die Person hat zugestimmt.",
+  makeVoice: "Stimme anlegen", recording: "nimmt auf … {s} s", writing: "Whisper schreibt mit …", tooShort: "zu kurz – mindestens 5 Sekunden",
+  making: "Stimme wird angelegt … (~10 s)", made: "Stimme „{n}“ ist da und gewählt", namePh: "Name, z. B. Meine Stimme", ownVoices: "Eigene Stimmen:",
+  delAsk: "Stimme „{n}“ löschen?", textPh: "Was gesagt wird (genau so)",
   micDenied: "Mikrofon nicht erlaubt – im Browser links neben der Adresse (Schloss/ⓘ) das Mikrofon für diese Seite erlauben",
   micNone: "Kein Mikrofon gefunden – ist eines angesteckt und in Windows/macOS als Eingabegerät gewählt?",
   micBusy: "Das Mikrofon ist belegt – ein anderes Programm (Teams, Zoom, ein anderer Tab) nutzt es gerade",
@@ -151,6 +180,11 @@ const T = DE ? {
   noMic: "No microphone (the page needs https or localhost)", micDead: "The microphone gives nothing – please restart",
   idle: "Voice mode ended (silence)", earGone: "Lost the connection to the ear – please restart", wrong: "Wrong password",
   noEar: "The ear is not reachable – is the server running?", ready: "ready", off: "server gone",
+  ownVoice: "Your own voice", ownHint: "Speak 10–20 seconds clearly (or pick a recording). Whisper writes the text down – please check it.",
+  record: "● Record", stop: "■ Stop", file: "File …", consent: "This is my voice, or the person agreed.",
+  makeVoice: "Create voice", recording: "recording … {s} s", writing: "Whisper is writing it down …", tooShort: "too short – at least 5 seconds",
+  making: "creating the voice … (~10 s)", made: "voice “{n}” is ready and chosen", namePh: "Name, e.g. My voice", ownVoices: "Own voices:",
+  delAsk: "Delete voice “{n}”?", textPh: "What is said (exactly)",
   micDenied: "Microphone not allowed – allow it for this page (lock / ⓘ left of the address)",
   micNone: "No microphone found – is one plugged in and chosen as the input device?",
   micBusy: "The microphone is busy – another program (Teams, Zoom, another tab) is using it",
@@ -422,6 +456,61 @@ async function boot() {
   if (!list.some(v => v.id === voiceName)) voiceName = list.some(v => v.id === info.voice) ? info.voice : list[0].id;
   $("voice-sel").innerHTML = list.map(v => `<option value="${esc(v.id)}"${v.id === voiceName ? " selected" : ""}>${esc(v.label)}</option>`).join("");
   loadGreeting(voiceName);
+  $("clone").hidden = !info.library;   // only a voice library can learn new voices
+  if (info.library) ownVoices(list);
+}
+// ---------------------------------------------------------------- 🎙 your own voice (TTS service in library mode)
+let recBlob = null, recName = "rec.webm", mediaRec = null, recTimer = null;
+function recShow(on) { for (const id of ["rec-play", "rec-text", "rec-name", "rec-consent-line", "rec-go-line"]) $(id).hidden = !on; recReady(); }
+async function recGot(blob, name) {   // a recording: play it back, let Whisper write it down
+  recBlob = blob; recName = name; recShow(true);
+  $("rec-play").src = URL.createObjectURL(blob); $("rec-state").textContent = T.writing; $("rec-text").value = "";
+  const fd = new FormData(); fd.append("audio", blob, name);
+  try { const j = await (await fetch("/api/transcribe", {method: "POST", body: fd})).json(); $("rec-text").value = j.text || ""; $("rec-state").textContent = ""; }
+  catch { $("rec-state").textContent = ""; }
+}
+$("rec-name").placeholder = T.namePh; $("rec-text").placeholder = T.textPh;
+$("rec-btn").onclick = async () => {
+  if (mediaRec) { mediaRec.stop(); return; }
+  if (!micPossible()) return httpsHelp();
+  let st; try { st = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: true}}); }
+  catch (e) { toast(micError(e)); return; }
+  const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+  const parts = []; mediaRec = new MediaRecorder(st, mime ? {mimeType: mime} : undefined);
+  mediaRec.ondataavailable = e => e.data.size && parts.push(e.data);
+  const t0 = Date.now();
+  mediaRec.onstop = () => {
+    clearInterval(recTimer); st.getTracks().forEach(t => t.stop()); $("rec-btn").textContent = T.record; $("rec-btn").classList.remove("rec-on");
+    const secs = (Date.now() - t0) / 1000, type = mediaRec.mimeType || "audio/webm"; mediaRec = null;
+    if (secs < 5) { $("rec-state").textContent = T.tooShort; return; }
+    recGot(new Blob(parts, {type}), type.includes("mp4") ? "rec.mp4" : "rec.webm");
+  };
+  mediaRec.start(250); $("rec-btn").textContent = T.stop; $("rec-btn").classList.add("rec-on");
+  recTimer = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); $("rec-state").textContent = T.recording.replace("{s}", s); if (s >= 25) mediaRec && mediaRec.stop(); }, 250);
+};
+$("rec-file").onchange = e => { const f = e.target.files[0]; if (f) recGot(f, f.name); e.target.value = ""; };
+function recReady() { $("rec-go").disabled = !(recBlob && $("rec-consent").checked && $("rec-name").value.trim() && $("rec-text").value.trim().length >= 10); }
+for (const id of ["rec-consent", "rec-name", "rec-text"]) $(id).addEventListener("input", recReady);
+$("rec-consent").addEventListener("change", recReady);
+$("rec-go").onclick = async () => {
+  const label = $("rec-name").value.trim(), id = label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32) + "_" + Math.random().toString(36).slice(2, 5);
+  const fd = new FormData(); fd.append("audio", recBlob, recName); fd.append("id", id); fd.append("label", label);
+  fd.append("text", $("rec-text").value.trim()); fd.append("consent", "yes");
+  $("rec-go").disabled = true; $("rec-state").textContent = T.making;
+  const r = await fetch("/api/voices/clone", {method: "POST", body: fd}); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $("rec-state").textContent = "❌ " + (j.error || r.status); recReady(); return; }
+  voiceName = j.id; store.set("fv-voice", voiceName); recBlob = null; recShow(false); $("rec-consent").checked = false; $("rec-name").value = "";
+  $("rec-state").textContent = "✅ " + T.made.replace("{n}", label); await boot();
+};
+function ownVoices(list) {
+  // only voices made on this page (tag "eigene") - not those of other programs sharing the library
+  const own = list.filter(v => v.studio && (v.tags || []).includes("eigene"));
+  $("own-list").innerHTML = own.length ? `<p class="small" style="margin:10px 0 0">${T.ownVoices}</p>` + own.map(v => `<div class="own"><span>${esc(v.label)}</span><button class="btn" data-del="${esc(v.id)}" aria-label="delete">✕</button></div>`).join("") : "";
+  $("own-list").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const v = own.find(x => x.id === b.dataset.del); if (!confirm(T.delAsk.replace("{n}", v.label))) return;
+    await fetch(`/api/voices/${encodeURIComponent(v.id)}/delete`, {method: "POST"}); store.set("fv-greet-" + v.id, "");
+    if (voiceName === v.id) voiceName = ""; boot();
+  });
 }
 render(); boot();
 </script>

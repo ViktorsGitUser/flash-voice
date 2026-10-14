@@ -50,6 +50,31 @@ def voices() -> list[dict]:
         return []
 
 
+def tts_health() -> dict:
+    try:
+        return _http.get(config.TTS_URL + "/health", timeout=3).json()
+    except Exception:
+        return {}
+
+
+def clone_voice(audio: bytes, filename: str, vid: str, label: str, text: str) -> tuple[int, dict]:
+    """A recording becomes a voice (the TTS service in library mode filters hiss and hum, ~10 s)."""
+    r = _http.post(config.TTS_URL + "/voices/clone", files={"audio": (filename or "rec.webm", audio)},
+                   data={"id": vid, "label": label, "text": text, "tags": "eigene", "clean": "true"}, timeout=180)
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, {"error": r.text[:300]}
+
+
+def delete_voice(vid: str) -> tuple[int, dict]:
+    r = _http.post(config.TTS_URL + "/voices/delete", data={"id": vid}, timeout=30)
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, {"error": r.text[:300]}
+
+
 def speak_wav(text: str, voice: str, lang: str) -> bytes | None:
     try:
         r = _http.post(config.TTS_URL + "/speak", data={"text": text, "speaker": voice, "language": lang}, timeout=60)

@@ -21,7 +21,7 @@ POST /voices/update form: id, label, description, tags       POST /voices/delete
    (update/delete only voices made over this API: "studio": true)
 
 Run:  python services/tts_server.py   (FV_TTS_PORT 8086, FV_TTS_HOST 127.0.0.1). ~5 GB of VRAM; on an RTX 5060 Ti the
-1.7B model speaks ~2x faster than real time.
+1.7B model speaks ~2x faster than real time. FV_TTS_PRIORITY (default "above"; "high", "normal"): the process priority.
 """
 import base64
 import io
@@ -61,6 +61,27 @@ LANGUAGES = {"de": "German", "en": "English", "fr": "French", "es": "Spanish", "
 FRAMES_PER_S = 12        # the 12 Hz codec: one generation step per 1/12 s of sound
 MAX_WAIT_S = 15          # a request that waited longer than this for the model: nobody is listening any more
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+def _priority():
+    """The voice must stay ahead of real time while the LLM writes on the same PC and fills the CPU: on an 8-core CPU
+    with the LLM writing, a sentence took 1.2x real time (the voice stuttered), with priority "above normal" 0.5x."""
+    want = os.environ.get("FV_TTS_PRIORITY", "above").strip().lower()
+    if want in ("", "normal", "off"):
+        return
+    try:
+        if os.name == "nt":
+            import ctypes
+            k = ctypes.windll.kernel32
+            k.SetPriorityClass(k.GetCurrentProcess(), 0x80 if want == "high" else 0x8000)   # HIGH / ABOVE_NORMAL
+        else:
+            os.nice(-10 if want == "high" else -5)   # needs the right to (root or CAP_SYS_NICE)
+        print(f"[tts] priority: {want}", flush=True)
+    except Exception as e:
+        print(f"[tts] priority {want} not possible: {e}", flush=True)
+
+
+_priority()
 
 
 def library() -> dict:

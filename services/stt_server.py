@@ -1,8 +1,8 @@
 """flash-voice STT service: Whisper large-v3-turbo (MIT) through faster-whisper (MIT, CTranslate2).
 
 POST /api/stt  form: audio (any format ffmpeg/PyAV reads), langs ("de,en" - Whisper picks the likeliest of these;
-               short clips are easily misdetected otherwise; "auto": any language), fast ("1": greedy, for the
-               ear's quick checks)
+               short clips are easily misdetected otherwise; "auto": any language - "auto,de,en" falls back to de/en when
+               Whisper is unsure; bs/sr count as hr), fast ("1": greedy, for the ear's quick checks)
                -> {"text", "lang"}
 POST /api/words (also /api/woerter)  form: audio, lang, text (optional hint) -> {"words": [{"w", "start", "end"}]}
 GET  /health (also /api/health)
@@ -40,12 +40,33 @@ list(_stt.transcribe(np.zeros(16000, dtype=np.float32), language="de", beam_size
 app = FastAPI(title="flash-voice STT")
 
 
+# Croatian is often heard as Bosnian or Serbian (the same language in practice) - written as Croatian (Latin script)
+SAME = {"bs": "hr", "sr": "hr"}
+SURE = 0.5
+
+
+def pick_language(audio, hints: tuple = ()) -> str:
+    """The language spoken, from all of Whisper's. Only when Whisper is unsure (a short "ja", noise) the likeliest of
+    `hints`. Never a forced wrong language: Croatian restricted to "de,en,hr" lost to English as its probability was
+    split over bs/sr/hr - and Whisper, told "English", translated it."""
+    probs = {}
+    for code, p in _stt.detect_language(audio)[2]:
+        probs[SAME.get(code, code)] = probs.get(SAME.get(code, code), 0.0) + p
+    best = max(probs, key=probs.get) if probs else "en"
+    if probs.get(best, 0) >= SURE or not hints:
+        return best
+    hint = max(hints, key=lambda h: probs.get(h, 0.0))
+    # a hint only when it is a close second - never force a language Whisper hardly hears (it would translate)
+    return hint if probs.get(hint, 0.0) >= 0.6 * probs[best] else best
+
+
 def transcribe(data: bytes, langs: tuple = LANGS, fast: bool = False) -> tuple[str, str]:
     audio = decode_audio(io.BytesIO(data), sampling_rate=16000)
-    if langs == ("auto",):   # any language Whisper knows (meeting transcripts): it decides by itself
+    if langs and langs[0] == "auto":   # any language Whisper knows, the rest of langs as a fallback when unsure
         with _lock:
-            segments, info = _stt.transcribe(audio, language=None, beam_size=1 if fast else 5, vad_filter=True)
-            return "".join(seg.text for seg in segments).strip(), info.language
+            lang = pick_language(audio, langs[1:])
+            segments, _ = _stt.transcribe(audio, language=lang, beam_size=1 if fast else 5, vad_filter=True)
+            return "".join(seg.text for seg in segments).strip(), lang
     with _lock:
         try:
             if len(langs) == 1:

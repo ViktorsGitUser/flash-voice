@@ -1,7 +1,8 @@
 """flash-voice STT service: Whisper large-v3-turbo (MIT) through faster-whisper (MIT, CTranslate2).
 
 POST /api/stt  form: audio (any format ffmpeg/PyAV reads), langs ("de,en" - Whisper picks the likeliest of these;
-               short clips are easily misdetected otherwise), fast ("1": greedy, for the ear's quick checks)
+               short clips are easily misdetected otherwise; "auto": any language), fast ("1": greedy, for the
+               ear's quick checks)
                -> {"text", "lang"}
 POST /api/words (also /api/woerter)  form: audio, lang, text (optional hint) -> {"words": [{"w", "start", "end"}]}
 GET  /health (also /api/health)
@@ -41,6 +42,10 @@ app = FastAPI(title="flash-voice STT")
 
 def transcribe(data: bytes, langs: tuple = LANGS, fast: bool = False) -> tuple[str, str]:
     audio = decode_audio(io.BytesIO(data), sampling_rate=16000)
+    if langs == ("auto",):   # any language Whisper knows (meeting transcripts): it decides by itself
+        with _lock:
+            segments, info = _stt.transcribe(audio, language=None, beam_size=1 if fast else 5, vad_filter=True)
+            return "".join(seg.text for seg in segments).strip(), info.language
     with _lock:
         try:
             if len(langs) == 1:

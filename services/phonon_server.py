@@ -14,12 +14,13 @@ POST /speak         form: text, speaker, language (de|en) -> audio/wav
 POST /speak_stream  form: text, speaker, language -> NDJSON lines {"audio": base64 WAV} of ~0.5 s each
 GET  /voices, /speakers, /health
 
-Run:  python services/phonon_server.py   (FV_PHONON_PORT 8085, FV_PHONON_QUANT q8)
+Run:  python services/phonon_server.py   (FV_PHONON_PORT 8085, FV_PHONON_QUANT q8, FV_PHONON_THREADS 4)
 """
 import base64
 import io
 import json
 import os
+import queue
 import threading
 
 import numpy as np
@@ -31,6 +32,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 PORT = int(os.environ.get("FV_PHONON_PORT", "8085"))
 HOST = os.environ.get("FV_PHONON_HOST", "127.0.0.1")
 QUANT = os.environ.get("FV_PHONON_QUANT", "q8")
+THREADS = int(os.environ.get("FV_PHONON_THREADS", "4"))   # 16 by default: took the CPU from Strata (its experts)
 MODELS = {"de": os.environ.get("FV_PHONON_DE", "hf://gradium/phonon-40m-de"),
           "en": os.environ.get("FV_PHONON_EN", "hf://gradium/phonon-31m-en")}
 SR = 24000
@@ -54,7 +56,9 @@ DEFAULT = os.environ.get("FV_PHONON_DEFAULT", "annika")
 
 import ptts  # noqa: E402
 
-print(f"[phonon] loading {', '.join(MODELS.values())} ({QUANT}) ...", flush=True)
+ptts.set_num_threads(THREADS)
+
+print(f"[phonon] loading {', '.join(MODELS.values())} ({QUANT}, {THREADS} threads) ...", flush=True)
 _tts = {lang: ptts.TTS(m, lang=lang, quant=QUANT) for lang, m in MODELS.items()}
 _lock = threading.Lock()   # one sentence at a time (the CPU threads are shared)
 for _lang, _t in _tts.items():   # every voice once: its first use loads it from the catalog (~1 s, measured)
@@ -79,10 +83,36 @@ def _wav(audio: np.ndarray) -> bytes:
 
 
 def _chunks(text: str, speaker: str, language: str):
+    """The sentence's audio as it is made. It is made in a thread of its own that holds the lock only while it
+    makes it: when the caller stops reading (Flash Chat cut the speech off, another voice was chosen) the thread
+    stops at the next piece and lets the lock go (22.10.2026: the lock was held by an abandoned stream - every
+    later sentence waited, the voice "stuttered" and then stopped)."""
     lang = _lang(language)
-    with _lock:
-        for c in _tts[lang].stream(text, voice=_voice(speaker, lang)):
-            yield np.asarray(c, dtype=np.float32).reshape(-1)
+    out, stop = queue.Queue(), threading.Event()
+
+    def work():
+        if not _lock.acquire(timeout=60):
+            out.put(RuntimeError("voice busy"))
+            out.put(None)
+            return
+        try:
+            for c in _tts[lang].stream(text, voice=_voice(speaker, lang)):
+                if stop.is_set():
+                    break
+                out.put(np.asarray(c, dtype=np.float32).reshape(-1))
+        except Exception as e:
+            out.put(e)
+        finally:
+            _lock.release()
+            out.put(None)
+    threading.Thread(target=work, daemon=True).start()
+    try:
+        while (item := out.get(timeout=60)) is not None:
+            if isinstance(item, Exception):
+                raise item
+            yield item
+    finally:
+        stop.set()
 
 
 @app.post("/speak")

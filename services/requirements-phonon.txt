@@ -1,0 +1,7 @@
+# Phonon (Gradium): a fast CPU voice, German + English - optional, instead of (or beside) the Qwen voice
+ptts==0.4.0
+fastapi
+uvicorn
+python-multipart
+soundfile
+numpy

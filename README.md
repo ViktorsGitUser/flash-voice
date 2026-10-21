@@ -69,6 +69,9 @@ python -m venv .venv-stt && .venv-stt/bin/pip install -r services/requirements-s
 # 3) the page and the ear (no GPU)
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 
+# 3b) optional: Phonon, a fast CPU voice for German + English (no GPU, ~300 MB RAM per language)
+python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirements-phonon.txt
+
 # 4) Clef (optional): llama.cpp's llama-server + the model (~6 GB)
 pip install -U huggingface_hub && hf download bartowski/Cloudflare_clef-flash-GGUF Cloudflare_clef-flash-Q4_K_M.gguf --local-dir models
 
@@ -88,6 +91,23 @@ TTS_PY=.venv-tts/bin/python STT_PY=.venv-stt/bin/python FV_PY=.venv/bin/python L
 
 Open the page, tap the microphone, talk. Tap the orb to interrupt by hand.
 Settings (top right): voice (9 built-in Qwen voices), interrupt by voice on/off, theme, clear the conversation.
+
+### Optional: Phonon instead of the Qwen voice (CPU, German + English)
+
+`services/phonon_server.py` speaks the same API as the Qwen voice (`/speak`, `/speak_stream`, `/voices`) with
+[Phonon](https://huggingface.co/gradium/phonon-31m-en) by Gradium: about 7x faster than real time on an 8-core CPU,
+the first sound after ~0.2 s, no GPU memory at all (the Qwen voice takes ~4.6 GB). Voices are German/English pairs
+(Annika/Harper, Lotta/Zoey, Nele/Everly, Henrik/Preston, Leon/Trevor, Mika/Easton), so a voice stays itself when
+the language changes. No voice cloning: the open Phonon models have only their catalog voices.
+
+```bash
+HF_TOKEN=hf_... .venv-phonon/bin/python services/phonon_server.py      # port 8085 (FV_PHONON_PORT)
+FV_TTS_URL=http://127.0.0.1:8085 ...                                    # point flash-voice at it
+```
+
+**Licenses differ:** `phonon-31m-en` is Apache 2.0. The German model `phonon-40m-de` is **CC BY-NC 4.0 – non-
+commercial use only** – and gated on Hugging Face (accept its terms, then set `HF_TOKEN` or `FV_HF_TOKEN_FILE`).
+For commercial use keep the Qwen voice for German.
 
 ## The microphone needs https
 
@@ -156,4 +176,5 @@ The two parts are plain HTTP/WebSocket – you can put them behind your own UI:
 ## Licenses
 
 flash-voice is Apache 2.0 (see [LICENSE](LICENSE)). The models and libraries it uses keep their own licenses – all
-permissive, see [NOTICE](NOTICE). Only clone voices of people who agreed to it.
+permissive except the optional German Phonon model (CC BY-NC 4.0, non-commercial), see [NOTICE](NOTICE). Only
+clone voices of people who agreed to it.

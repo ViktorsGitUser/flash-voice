@@ -41,6 +41,20 @@ zu / redet mit jemand anderem). Im Test: „mhm“ → 96 % zuhören, „warte m
 
 Installation, Start und alle Einstellungen: siehe die [englische README](README.md#install) – die Befehle sind dieselben.
 
+## Optional: Phonon statt der Qwen-Stimme (CPU, Deutsch + Englisch)
+
+`services/phonon_server.py` spricht dieselbe Schnittstelle wie die Qwen-Stimme, mit
+[Phonon](https://huggingface.co/gradium/phonon-31m-en) von Gradium: etwa 7× schneller als Echtzeit auf einer 8-Kern-CPU,
+erster Ton nach ~0,2 s, kein Grafikspeicher (die Qwen-Stimme braucht ~4,6 GB). Die Stimmen sind Paare aus einer
+deutschen und einer englischen (Annika/Harper, Lotta/Zoey, Nele/Everly, Henrik/Preston, Leon/Trevor, Mika/Easton).
+Kein Stimmklonen – die offenen Phonon-Modelle haben nur ihre Katalogstimmen. Installation:
+`python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirements-phonon.txt`, Start:
+`HF_TOKEN=hf_... .venv-phonon/bin/python services/phonon_server.py` (Port 8085), dann `FV_TTS_URL=http://127.0.0.1:8085`.
+
+**Unterschiedliche Lizenzen:** `phonon-31m-en` ist Apache 2.0. Das deutsche Modell `phonon-40m-de` steht unter
+**CC BY-NC 4.0 – nur nicht kommerziell** – und ist auf Hugging Face zugangsbeschränkt (Bedingungen annehmen, dann
+`HF_TOKEN` oder `FV_HF_TOKEN_FILE` setzen). Für kommerzielle Nutzung auf Deutsch bei der Qwen-Stimme bleiben.
+
 ## Das Mikrofon braucht https
 
 > ⚠️ Browser geben einer Webseite das Mikrofon **nur über https** frei – oder auf `http://localhost` /
@@ -66,5 +80,6 @@ Im Auto über Bluetooth übernimmt das Auto die Echo-Unterdrückung – dort mac
 
 ## Lizenz
 
-Apache 2.0 (siehe [LICENSE](LICENSE)); Modelle und Bibliotheken behalten ihre eigenen, freien Lizenzen ([NOTICE](NOTICE)).
+Apache 2.0 (siehe [LICENSE](LICENSE)); Modelle und Bibliotheken behalten ihre eigenen, freien Lizenzen ([NOTICE](NOTICE)) –
+außer dem optionalen deutschen Phonon-Modell (CC BY-NC 4.0, nur nicht kommerziell).
 Stimmen nur von Menschen klonen, die zugestimmt haben.

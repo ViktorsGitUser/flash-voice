@@ -72,6 +72,10 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 # 3b) optional: Phonon, a fast CPU voice for German + English (no GPU, ~300 MB RAM per language)
 python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirements-phonon.txt
 
+# 3c) optional: apptor-tiny-tts, a tiny German CPU voice (Apache 2.0; needs: apt install espeak-ng)
+python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub
+.venv-tinytts/bin/hf download apptor/apptor-tiny-tts apptor-tiny-tts-de.onnx apptor-tiny-tts-de.json apptor-tiny-tts-vocos-de.pt --local-dir models
+
 # 4) Clef (optional): llama.cpp's llama-server + the model (~6 GB)
 pip install -U huggingface_hub && hf download bartowski/Cloudflare_clef-flash-GGUF Cloudflare_clef-flash-Q4_K_M.gguf --local-dir models
 
@@ -108,6 +112,27 @@ FV_TTS_URL=http://127.0.0.1:8085 ...                                    # point 
 **Licenses differ:** `phonon-31m-en` is Apache 2.0. The German model `phonon-40m-de` is **CC BY-NC 4.0 – non-
 commercial use only** – and gated on Hugging Face (accept its terms, then set `HF_TOKEN` or `FV_HF_TOKEN_FILE`).
 For commercial use keep the Qwen voice for German.
+
+### Optional: apptor-tiny-tts, a tiny German voice (CPU, Apache 2.0)
+
+`services/tinytts_server.py` speaks the same API with apptor-tiny-tts, a German model built on
+[tiny-voca](https://github.com/n4ze3m/tiny-voca) by n4ze3m (not an official tiny-voca release; weights: [huggingface.co/apptor/apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts)): 4.5M parameters, one 21 MB ONNX file (`models/apptor-tiny-tts-de.onnx`), about 40x faster than real time on four CPU
+threads, no GPU. Two voices, `f2` (female) and `m2` (male); the Phonon voice ids are accepted too (female ones -> f2,
+male ones -> m2). Unlike `phonon-40m-de`, model and code are **Apache 2.0, commercial use allowed**. It was trained
+with the tiny-voca recipe on ~12 hours of synthetic German speech from Qwen3-TTS (texts: Common Voice, CC0). German
+only: set `FV_TINYTTS_EN_URL=http://127.0.0.1:8085` to pass English sentences on to Phonon's English model.
+
+```bash
+sudo apt install espeak-ng                     # phonemes (called as a program)
+python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt
+.venv-tinytts/bin/python services/tinytts_server.py      # port 8089 (FV_TINYTTS_PORT)
+FV_TTS_URL=http://127.0.0.1:8089 ...                       # point flash-voice at it
+```
+
+Optional second stage for a clearly cleaner sound: `FV_TINYTTS_VOCOS=models/apptor-tiny-tts-vocos-de.pt` re-synthesises the output
+with [Vocos](https://github.com/gemelo-ai/vocos) (MIT, 13.5M parameters) fine-tuned on the two German voices
+(`=pretrained` for the generic model). Still CPU only, ~20x real time; needs torch (CPU build) and
+`pip install -r services/requirements-tinytts-vocos.txt`.
 
 ## The microphone needs https
 
@@ -176,5 +201,6 @@ The two parts are plain HTTP/WebSocket – you can put them behind your own UI:
 ## Licenses
 
 flash-voice is Apache 2.0 (see [LICENSE](LICENSE)). The models and libraries it uses keep their own licenses – all
-permissive except the optional German Phonon model (CC BY-NC 4.0, non-commercial), see [NOTICE](NOTICE). Only
+permissive except the optional German Phonon model (CC BY-NC 4.0, non-commercial; the German apptor-tiny-tts voice is
+the Apache 2.0 alternative), see [NOTICE](NOTICE). Only
 clone voices of people who agreed to it.

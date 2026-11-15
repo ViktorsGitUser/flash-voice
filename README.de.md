@@ -55,6 +55,24 @@ Kein Stimmklonen – die offenen Phonon-Modelle haben nur ihre Katalogstimmen. I
 **CC BY-NC 4.0 – nur nicht kommerziell** – und ist auf Hugging Face zugangsbeschränkt (Bedingungen annehmen, dann
 `HF_TOKEN` oder `FV_HF_TOKEN_FILE` setzen). Für kommerzielle Nutzung auf Deutsch bei der Qwen-Stimme bleiben.
 
+## Optional: apptor-tiny-tts, eine winzige deutsche Stimme (CPU, Apache 2.0)
+
+`services/tinytts_server.py` spricht dieselbe Schnittstelle mit apptor-tiny-tts, einem deutschen Modell auf Basis von
+[tiny-voca](https://github.com/n4ze3m/tiny-voca) von n4ze3m (keine offizielle tiny-voca-Version; Gewichte: [huggingface.co/apptor/apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts)): 4,5 Mio. Parameter, eine 21-MB-ONNX-Datei
+(`models/apptor-tiny-tts-de.onnx`), etwa 40× schneller als Echtzeit auf vier CPU-Threads, keine Grafikkarte. Zwei Stimmen,
+`f2` (weiblich) und `m2` (männlich); die Phonon-Stimmen-IDs werden ebenfalls angenommen (weibliche -> f2, männliche
+-> m2). Anders als `phonon-40m-de` stehen Modell und Code unter **Apache 2.0 – kommerzielle Nutzung erlaubt**.
+Trainiert nach dem tiny-voca-Rezept auf ~12 Stunden synthetischer deutscher Sprache aus Qwen3-TTS (Texte: Common
+Voice, CC0). Nur Deutsch: mit `FV_TINYTTS_EN_URL=http://127.0.0.1:8085` gehen englische Sätze an Phonons englisches
+Modell. Installation: `sudo apt install espeak-ng`, dann
+`python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub`, Modell: `.venv-tinytts/bin/hf download apptor/apptor-tiny-tts apptor-tiny-tts-de.onnx apptor-tiny-tts-de.json apptor-tiny-tts-vocos-de.pt --local-dir models`, Start:
+`.venv-tinytts/bin/python services/tinytts_server.py` (Port 8089), dann `FV_TTS_URL=http://127.0.0.1:8089`.
+
+Optionale zweite Stufe für einen deutlich saubereren Klang: `FV_TINYTTS_VOCOS=models/apptor-tiny-tts-vocos-de.pt` erzeugt die
+Ausgabe mit [Vocos](https://github.com/gemelo-ai/vocos) (MIT, 13,5 Mio. Parameter) neu, nachtrainiert auf die beiden
+deutschen Stimmen (`=pretrained` für das allgemeine Modell). Weiterhin nur CPU, ~20× Echtzeit; braucht torch
+(CPU-Version) und `pip install -r services/requirements-tinytts-vocos.txt`.
+
 ## Das Mikrofon braucht https
 
 > ⚠️ Browser geben einer Webseite das Mikrofon **nur über https** frei – oder auf `http://localhost` /
@@ -81,5 +99,6 @@ Im Auto über Bluetooth übernimmt das Auto die Echo-Unterdrückung – dort mac
 ## Lizenz
 
 Apache 2.0 (siehe [LICENSE](LICENSE)); Modelle und Bibliotheken behalten ihre eigenen, freien Lizenzen ([NOTICE](NOTICE)) –
-außer dem optionalen deutschen Phonon-Modell (CC BY-NC 4.0, nur nicht kommerziell).
+außer dem optionalen deutschen Phonon-Modell (CC BY-NC 4.0, nur nicht kommerziell; die deutsche apptor-tiny-tts-Stimme ist
+die Apache-2.0-Alternative).
 Stimmen nur von Menschen klonen, die zugestimmt haben.

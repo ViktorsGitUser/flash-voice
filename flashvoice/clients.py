@@ -1,5 +1,5 @@
 """The services flash-voice talks to: the LLM (OpenAI-compatible), the voice (tts_server.py), Whisper
-(stt_server.py) and Clef (llama.cpp's llama-server with Cloudflare's clef-flash, endpoint /v1/systemone)."""
+(stt_server.py) and Clef (llama.cpp's llama-server with the decision model vllm-d3-mini, endpoint /v1/systemone)."""
 import json
 import time
 

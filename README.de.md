@@ -25,18 +25,19 @@ OpenAI-kompatiblen Modell (Ollama, llama.cpp, vLLM, LM Studio, OpenAI, OpenRoute
 | … war „mhm“ / Echo / Geräusch | Whisper + Regeln + Clef → wieder laut | ~1 s |
 | … war eine Unterbrechung | Clef: Unterbrechung → es hört auf und hört weiter zu | ~1,5 s nach deinem ersten Wort |
 
-Clef ([Cloudflare clef-flash](https://huggingface.co/Cloudflare/clef-flash)) ist kein Chat-Modell: Es bekommt einen
-Text und Fragen mit festen Antworten und liefert für jede eine Wahrscheinlichkeit, in ~0,3 s. Hier werden zwei Fragen
+Clef, das Entscheidungsmodell ([vllm-d3-mini](https://huggingface.co/vllm-sr/d3-mini), Apache 2.0, 4B; bis November
+2026 [Cloudflare clef-flash](https://huggingface.co/Cloudflare/clef-flash), 9B), ist kein Chat-Modell: Es bekommt einen
+Text und Fragen mit festen Antworten und liefert für jede eine Wahrscheinlichkeit, in ~35 ms auf der GPU. Hier werden zwei Fragen
 gestellt – *ist der Gedanke fertig?* und *was tut der Mensch, während der Assistent spricht?* (unterbricht / hört nur
 zu / redet mit jemand anderem). Im Test: „mhm“ → 96 % zuhören, „warte mal, stopp“ → 96 % unterbricht. Ohne Clef
 übernehmen einfache Regeln.
 
 ## Was du brauchst
 
-- Eine **NVIDIA-Grafikkarte mit ~13 GB frei** für Stimme, Ohren und Clef (getestet auf einer RTX 5060 Ti 16 GB),
+- Eine **NVIDIA-Grafikkarte mit ~12 GB frei** für Stimme, Ohren und Clef (getestet auf einer RTX 5060 Ti 16 GB),
   ohne Clef ~7 GB. Das LLM kann irgendwo laufen – am selben Rechner, auf einem anderen oder in der Cloud.
 - Python 3.12, einen OpenAI-kompatiblen LLM-Endpunkt und für Clef [llama.cpp](https://github.com/ggml-org/llama.cpp)
-  ab b11556 (dessen `llama-server` hat den Endpunkt `/v1/systemone`).
+  ab b11719 (dessen `llama-server` hat den Endpunkt `/v1/systemone` und kennt das Entscheidungsformat von d3-mini).
 - Einen Browser – und **https** fürs Mikrofon (siehe unten).
 
 Installation, Start und alle Einstellungen: siehe die [englische README](README.md#install) – die Befehle sind dieselben.
@@ -92,8 +93,9 @@ Im Auto über Bluetooth übernimmt das Auto die Echo-Unterdrückung – dort mac
 
 - Solange die Stimme noch rechnet, teilt sich Whisper mit ihr die Grafikkarte: eine Unterbrechung wird dann in ~1,5–3 s
   bestätigt statt ~1 s (leiser wird es trotzdem sofort).
-- Einen Satz an jemand anderen im Raum („gibst du mir das Wasser?“) hält Clef eher für eine Unterbrechung – lieber
-  einmal zu oft still als drüberreden.
+- Einen Satz an jemand anderen im Raum („gibst du mir das Wasser?“) hielt clef-flash oft für eine Unterbrechung;
+  d3-mini hatte im Test alle solchen Sätze richtig (14 von 14 Unterbrechungsfällen, clef-flash 10 von 14). Im Zweifel
+  lieber einmal zu oft still als drüberreden.
 - Keine Werkzeuge, Dateien oder Gedächtnis – das ist die Stimme, das Gehirn bringst du mit.
 
 ## Lizenz

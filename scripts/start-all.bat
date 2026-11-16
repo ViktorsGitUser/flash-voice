@@ -6,7 +6,7 @@ if "%TTS_PY%"=="" set TTS_PY=.venv-tts\Scripts\python.exe
 if "%STT_PY%"=="" set STT_PY=.venv-stt\Scripts\python.exe
 if "%FV_PY%"=="" set FV_PY=.venv\Scripts\python.exe
 if "%LLAMA_SERVER%"=="" set LLAMA_SERVER=llama-server.exe
-if "%CLEF_GGUF%"=="" set CLEF_GGUF=models\Cloudflare_clef-flash-Q4_K_M.gguf
+if "%CLEF_GGUF%"=="" set CLEF_GGUF=models\vllm-d3-mini-Q8_0.gguf
 cd /d "%~dp0.."
 if not exist logs mkdir logs
 curl -s -f -o nul -m 3 http://127.0.0.1:8086/health || start "flash-voice TTS" /min cmd /c ""%TTS_PY%" services\tts_server.py > logs\tts.log 2>&1"

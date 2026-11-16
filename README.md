@@ -28,8 +28,8 @@ OpenAI-compatible model (Ollama, llama.cpp, vLLM, LM Studio, OpenAI, OpenRouter 
               └──────────────────────────────────── └────────────────────────────────────────────────┘
                                                         │ TTS :8086     │ STT :8087     │ Clef :8088
                                                         ▼               ▼               ▼
-                                                   Qwen3-TTS 1.7B   Whisper large-   clef-flash
-                                                   (~5 GB VRAM)     v3-turbo (~1.5)  (~6 GB, optional)
+                                                   Qwen3-TTS 1.7B   Whisper large-   vllm-d3-mini
+                                                   (~5 GB VRAM)     v3-turbo (~1.5)  (~5 GB, optional)
 ```
 
 | Moment | What happens | Time |
@@ -40,18 +40,19 @@ OpenAI-compatible model (Ollama, llama.cpp, vLLM, LM Studio, OpenAI, OpenRouter 
 | … it was "mhm" / echo / noise | Whisper + rules + Clef → full volume again | ~1 s |
 | … it was an interruption | Clef: interruption → it stops and listens on | ~1.5 s after you started |
 
-Clef ([Cloudflare clef-flash](https://huggingface.co/Cloudflare/clef-flash)) is not a chat model: it gets a text and
-questions with fixed answers and returns a probability for each, in ~0.3 s. Two questions are asked here – *is the
+Clef, the decision model ([vllm-d3-mini](https://huggingface.co/vllm-sr/d3-mini), Apache 2.0, 4B; until November 2026
+[Cloudflare clef-flash](https://huggingface.co/Cloudflare/clef-flash), 9B), is not a chat model: it gets a text and
+questions with fixed answers and returns a probability for each, in ~35 ms on the GPU. Two questions are asked here – *is the
 thought finished?* (yes/no) and *what is the person doing while the assistant speaks?* (interrupting / just
 listening / talking to someone else). In tests: "mhm" → 96 % listening, "wait, stop" → 96 % interrupting.
 Without Clef, simple rules take over (it works, just less cleverly).
 
 ## What you need
 
-- An **NVIDIA GPU with ~13 GB free** for voice + ears + Clef (tested on an RTX 5060 Ti 16 GB, next to nothing else).
+- An **NVIDIA GPU with ~12 GB free** for voice + ears + Clef (tested on an RTX 5060 Ti 16 GB, next to nothing else).
   Without Clef ~7 GB. The LLM itself can run anywhere – on the same machine, another one, or a cloud API.
 - Python 3.12, an OpenAI-compatible LLM endpoint, and for Clef [llama.cpp](https://github.com/ggml-org/llama.cpp)
-  b11556 or newer (its `llama-server` has the `/v1/systemone` endpoint).
+  b11719 or newer (its `llama-server` has the `/v1/systemone` endpoint and knows d3-mini's decision format).
 - A browser – and **https** for the microphone (see [The microphone needs https](#the-microphone-needs-https)).
 
 ## Install
@@ -76,8 +77,8 @@ python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirem
 python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub
 .venv-tinytts/bin/hf download apptor/apptor-tiny-tts apptor-tiny-tts-de.onnx apptor-tiny-tts-de.json apptor-tiny-tts-vocos-de.pt --local-dir models
 
-# 4) Clef (optional): llama.cpp's llama-server + the model (~6 GB)
-pip install -U huggingface_hub && hf download bartowski/Cloudflare_clef-flash-GGUF Cloudflare_clef-flash-Q4_K_M.gguf --local-dir models
+# 4) Clef (optional): llama.cpp's llama-server + the decision model (~5 GB)
+pip install -U huggingface_hub && hf download ggml-org/vllm-d3-mini-GGUF vllm-d3-mini-Q8_0.gguf --local-dir models
 
 cp .env.example .env      # set FV_LLM_URL (and FV_LLM_MODEL / FV_LLM_KEY)
 ```
@@ -193,8 +194,9 @@ The two parts are plain HTTP/WebSocket – you can put them behind your own UI:
 
 - While the voice is still generating, Whisper shares the GPU with it: an interruption is then confirmed in ~1.5–3 s
   instead of ~1 s (the volume goes down right away regardless).
-- Clef tends to treat a sentence to someone else in the room ("could you pass the water?") as an interruption – it
-  rather stops once too often than talks over you.
+- A sentence to someone else in the room ("could you pass the water?") was often taken for an interruption by
+  clef-flash; d3-mini got all such test sentences right (14 of 14 interruption cases, clef-flash 10 of 14). When in
+  doubt it still rather stops once too often than talks over you.
 - The page keeps the conversation in the browser (last 60 messages). There are no tools, files or memory – this is the
   voice, bring your own brain.
 

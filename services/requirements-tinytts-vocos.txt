@@ -1,3 +1,4 @@
-# Optional second stage of the apptor-tiny-tts voice (FV_TINYTTS_VOCOS). CPU torch is enough:
+# Only for the PyTorch version of the second stage (FV_TINYTTS_VOCOS=*.pt or =pretrained); the default ONNX file
+# models/apptor-vocos-de.int8.onnx needs nothing extra. CPU torch is enough:
 #   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 vocos>=0.1.0

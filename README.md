@@ -73,9 +73,9 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 # 3b) optional: Phonon, a fast CPU voice for German + English (no GPU, ~300 MB RAM per language)
 python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirements-phonon.txt
 
-# 3c) optional: apptor-tiny-tts, a tiny German CPU voice (Apache 2.0; needs: apt install espeak-ng)
+# 3c) optional: apptor-tiny-tts, a tiny German CPU voice (Apache 2.0; no eSpeak, no torch), Hochdeutsch or Austrian
 python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub
-.venv-tinytts/bin/hf download apptor/apptor-tiny-tts apptor-tiny-tts-de.onnx apptor-tiny-tts-de.json apptor-tiny-tts-vocos-de.pt --local-dir models
+.venv-tinytts/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models
 
 # 4) Clef (optional): llama.cpp's llama-server + the decision model (~5 GB)
 pip install -U huggingface_hub && hf download ggml-org/vllm-d3-mini-GGUF vllm-d3-mini-Q8_0.gguf --local-dir models
@@ -117,23 +117,31 @@ For commercial use keep the Qwen voice for German.
 ### Optional: apptor-tiny-tts, a tiny German voice (CPU, Apache 2.0)
 
 `services/tinytts_server.py` speaks the same API with apptor-tiny-tts, a German model built on
-[tiny-voca](https://github.com/n4ze3m/tiny-voca) by n4ze3m (not an official tiny-voca release; weights: [huggingface.co/apptor/apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts)): 4.5M parameters, one 21 MB ONNX file (`models/apptor-tiny-tts-de.onnx`), about 40x faster than real time on four CPU
-threads, no GPU. Two voices, `f2` (female) and `m2` (male); the Phonon voice ids are accepted too (female ones -> f2,
+[tiny-voca](https://github.com/n4ze3m/tiny-voca) by n4ze3m (not an official tiny-voca release; weights:
+[apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts) and, with an Austrian accent switch,
+[apptor-tiny-tts-at](https://huggingface.co/apptor/apptor-tiny-tts-at); browser demo:
+[tiny-tts.apptor.at](https://tiny-tts.apptor.at)): 4.5M parameters, one 21 MB ONNX file, about 40x faster than real time
+on four CPU threads, no GPU. Letters -> phonemes with the small apptor-g2p-de model, so **no eSpeak NG** is needed. Two voices, `f2` (female) and `m2` (male); the Phonon voice ids are accepted too (female ones -> f2,
 male ones -> m2). Unlike `phonon-40m-de`, model and code are **Apache 2.0, commercial use allowed**. It was trained
 with the tiny-voca recipe on ~12 hours of synthetic German speech from Qwen3-TTS (texts: Common Voice, CC0). German
 only: set `FV_TINYTTS_EN_URL=http://127.0.0.1:8085` to pass English sentences on to Phonon's English model.
 
 ```bash
-sudo apt install espeak-ng                     # phonemes (called as a program)
-python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt
-.venv-tinytts/bin/python services/tinytts_server.py      # port 8089 (FV_TINYTTS_PORT)
+python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub
+.venv-tinytts/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models
+FV_TINYTTS_MODEL=models/apptor-tiny-tts-at.onnx .venv-tinytts/bin/python services/tinytts_server.py   # port 8089
 FV_TTS_URL=http://127.0.0.1:8089 ...                       # point flash-voice at it
 ```
 
-Optional second stage for a clearly cleaner sound: `FV_TINYTTS_VOCOS=models/apptor-tiny-tts-vocos-de.pt` re-synthesises the output
-with [Vocos](https://github.com/gemelo-ai/vocos) (MIT, 13.5M parameters) fine-tuned on the two German voices
-(`=pretrained` for the generic model). Still CPU only, ~20x real time; needs torch (CPU build) and
-`pip install -r services/requirements-tinytts-vocos.txt`.
+**Austrian accent** (apptor-tiny-tts-at, v0.1, still mild): the voice ids `f2-de`/`m2-de` speak Hochdeutsch, `-at` with
+accent 1.0, `-wien` 1.3, `-oarg` 1.6; plain `f2`/`m2` use `FV_TINYTTS_ACCENT` (default 1.3). A form field `accent`
+(0 to 1.6) overrides it per request. `models/apptor-tiny-tts-de.onnx` (from apptor/apptor-tiny-tts) is the plain German model.
+
+The second stage, [Vocos](https://github.com/gemelo-ai/vocos) (MIT) fine-tuned on the two voices, re-synthesises the
+output for a clearly cleaner sound. It is on by default when `models/apptor-vocos-de.int8.onnx` is there (ONNX, no
+torch, ~0.1 s per sentence); `FV_TINYTTS_VOCOS=` (empty) switches it off. The older PyTorch version
+(`=models/apptor-tiny-tts-vocos-de.pt` or `=pretrained`) needs torch and `services/requirements-tinytts-vocos.txt`.
+`FV_TINYTTS_G2P=espeak` uses the espeak-ng program instead of the G2P model.
 
 ## The microphone needs https
 

@@ -59,20 +59,28 @@ Kein Stimmklonen – die offenen Phonon-Modelle haben nur ihre Katalogstimmen. I
 ## Optional: apptor-tiny-tts, eine winzige deutsche Stimme (CPU, Apache 2.0)
 
 `services/tinytts_server.py` spricht dieselbe Schnittstelle mit apptor-tiny-tts, einem deutschen Modell auf Basis von
-[tiny-voca](https://github.com/n4ze3m/tiny-voca) von n4ze3m (keine offizielle tiny-voca-Version; Gewichte: [huggingface.co/apptor/apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts)): 4,5 Mio. Parameter, eine 21-MB-ONNX-Datei
-(`models/apptor-tiny-tts-de.onnx`), etwa 40× schneller als Echtzeit auf vier CPU-Threads, keine Grafikkarte. Zwei Stimmen,
+[tiny-voca](https://github.com/n4ze3m/tiny-voca) von n4ze3m (keine offizielle tiny-voca-Version; Gewichte:
+[apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts) und, mit Akzent-Regler für Österreichisch,
+[apptor-tiny-tts-at](https://huggingface.co/apptor/apptor-tiny-tts-at); Browser-Demo: [tiny-tts.apptor.at](https://tiny-tts.apptor.at)):
+4,5 Mio. Parameter, eine 21-MB-ONNX-Datei, etwa 40× schneller als Echtzeit auf vier CPU-Threads, keine Grafikkarte,
+**kein eSpeak NG** (eigenes kleines Aussprache-Modell apptor-g2p-de). Zwei Stimmen,
 `f2` (weiblich) und `m2` (männlich); die Phonon-Stimmen-IDs werden ebenfalls angenommen (weibliche -> f2, männliche
 -> m2). Anders als `phonon-40m-de` stehen Modell und Code unter **Apache 2.0 – kommerzielle Nutzung erlaubt**.
 Trainiert nach dem tiny-voca-Rezept auf ~12 Stunden synthetischer deutscher Sprache aus Qwen3-TTS (Texte: Common
 Voice, CC0). Nur Deutsch: mit `FV_TINYTTS_EN_URL=http://127.0.0.1:8085` gehen englische Sätze an Phonons englisches
-Modell. Installation: `sudo apt install espeak-ng`, dann
-`python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub`, Modell: `.venv-tinytts/bin/hf download apptor/apptor-tiny-tts apptor-tiny-tts-de.onnx apptor-tiny-tts-de.json apptor-tiny-tts-vocos-de.pt --local-dir models`, Start:
-`.venv-tinytts/bin/python services/tinytts_server.py` (Port 8089), dann `FV_TTS_URL=http://127.0.0.1:8089`.
+Modell. Installation:
+`python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub`, Modelle: `.venv-tinytts/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models`, Start:
+`FV_TINYTTS_MODEL=models/apptor-tiny-tts-at.onnx .venv-tinytts/bin/python services/tinytts_server.py` (Port 8089), dann `FV_TTS_URL=http://127.0.0.1:8089`.
 
-Optionale zweite Stufe für einen deutlich saubereren Klang: `FV_TINYTTS_VOCOS=models/apptor-tiny-tts-vocos-de.pt` erzeugt die
-Ausgabe mit [Vocos](https://github.com/gemelo-ai/vocos) (MIT, 13,5 Mio. Parameter) neu, nachtrainiert auf die beiden
-deutschen Stimmen (`=pretrained` für das allgemeine Modell). Weiterhin nur CPU, ~20× Echtzeit; braucht torch
-(CPU-Version) und `pip install -r services/requirements-tinytts-vocos.txt`.
+**Österreichischer Akzent** (apptor-tiny-tts-at, v0.1, noch dezent): die Stimmen `f2-de`/`m2-de` sprechen Hochdeutsch,
+`-at` mit Akzent 1,0, `-wien` 1,3, `-oarg` 1,6; `f2`/`m2` nehmen `FV_TINYTTS_ACCENT` (Standard 1,3). Das Formularfeld
+`accent` (0 bis 1,6) überschreibt das pro Anfrage.
+
+Die zweite Stufe, [Vocos](https://github.com/gemelo-ai/vocos) (MIT), nachtrainiert auf die beiden Stimmen, erzeugt die
+Ausgabe für einen deutlich saubereren Klang neu. Sie ist automatisch an, wenn `models/apptor-vocos-de.int8.onnx` da ist
+(ONNX, kein torch, ~0,1 s pro Satz); `FV_TINYTTS_VOCOS=` (leer) schaltet sie ab. Die ältere PyTorch-Version
+(`=models/apptor-tiny-tts-vocos-de.pt` oder `=pretrained`) braucht torch und `services/requirements-tinytts-vocos.txt`.
+Mit `FV_TINYTTS_G2P=espeak` wird statt des Aussprache-Modells das Programm espeak-ng verwendet.
 
 ## Das Mikrofon braucht https
 

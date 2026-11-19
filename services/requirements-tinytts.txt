@@ -1,4 +1,5 @@
-# apptor-tiny-tts German voice (built on tiny-voca) (services/tinytts_server.py) - CPU only. Also needs the espeak-ng program (apt install espeak-ng).
+# apptor-tiny-tts German / Austrian voice (built on tiny-voca) (services/tinytts_server.py) - CPU only, no eSpeak NG needed
+# (models/apptor-g2p-de.onnx; without it the server falls back to the espeak-ng program).
 onnxruntime>=1.18
 numpy>=1.24
 soundfile>=0.12

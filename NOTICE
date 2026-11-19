@@ -11,13 +11,17 @@ Models (downloaded on first use)
   clef-flash (GGUF by bartowski)             Cloudflare            Apache-2.0
   Phonon phonon-31m-en (optional)            Gradium               Apache-2.0
   Phonon phonon-40m-de (optional)            Gradium               CC BY-NC 4.0 (non-commercial only)
-  apptor-tiny-tts German (optional)          this repository       Apache-2.0 (models/apptor-tiny-tts-de.onnx)
+  apptor-tiny-tts German / Austrian (opt.)   this repository       Apache-2.0 (huggingface.co/apptor/apptor-tiny-tts, -at)
 
 Included
   models/apptor-tiny-tts-de.onnx  apptor-tiny-tts, German, trained for flash-voice   Apache-2.0
       architecture and recipe: github.com/n4ze3m/tiny-voca (Apache-2.0); training speech made with
       Qwen3-TTS 1.7B Base (Apache-2.0); texts from Mozilla Common Voice German (CC0)
-  models/apptor-tiny-tts-vocos-de.pt        Vocos mel-24khz (charactr / gemelo-ai, MIT), fine-tuned on the German voices  MIT
+  models/apptor-tiny-tts-at.onnx  the same with an Austrian accent switch; accent learned from Mozilla Common Voice
+      German recordings (CC0); real speakers removed, only the two synthetic voices remain   Apache-2.0
+  models/apptor-g2p-de.onnx  letters -> phonemes for apptor-tiny-tts (replaces eSpeak NG)   Apache-2.0
+  models/apptor-vocos-de.int8.onnx, models/apptor-tiny-tts-vocos-de.pt   Vocos mel-24khz (charactr / gemelo-ai, MIT),
+      fine-tuned on the German voices  MIT
   services/tinyvoca/        text front end of tiny-voca (Apache-2.0), German fork
   models/silero_vad.onnx  Silero VAD v5.1.2   Silero Team           MIT (models/SILERO-LICENSE.txt)
 
@@ -26,6 +30,6 @@ Libraries
   faster-whisper (MIT), CTranslate2 (MIT), onnxruntime (MIT), llama.cpp (MIT), FastAPI (MIT), Starlette (BSD-3-Clause),
   Uvicorn (BSD-3-Clause), httpx (BSD-3-Clause), websockets (BSD-3-Clause), NumPy (BSD-3-Clause),
   soundfile (BSD-3-Clause), cryptography (Apache-2.0 or BSD-3-Clause), librosa (ISC), ptts (MIT or Apache-2.0),
-  num2words (LGPL-2.1, apptor-tiny-tts voice). The apptor-tiny-tts voice calls the espeak-ng program (GPL-3.0) as a separate
-  process; it is not included.
+  num2words (LGPL-2.1, apptor-tiny-tts voice). The apptor-tiny-tts voice needs no eSpeak NG; only with FV_TINYTTS_G2P=espeak
+  it calls the espeak-ng program (GPL-3.0) as a separate process; it is not included.
   The NVIDIA CUDA/cuDNN pip packages are under NVIDIA's own license and are installed by the user.

@@ -61,5 +61,6 @@ def normalize(text):
     text = re.sub(r"(?<![\w-])-(\d+)", lambda m: "minus " + m[1], text)
     if _n2w is not None:
         text = re.sub(r"\d+", lambda m: _num(m[0]), text)
+    text = text.replace("einstausend", "eintausend")   # num2words: 101000 -> einhunderteinstausend
     text = re.sub(r"\bein(hundert|tausend)", r"\1", text)
     return re.sub(r"\s+", " ", text).strip()

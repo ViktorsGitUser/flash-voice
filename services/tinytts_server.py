@@ -83,13 +83,27 @@ VOICES = {
     "f2": ("Tiny F2" + (f" (Standard, Akzent {ACCENT:g})" if ACCENT_MODEL else ""), "F2", "weiblich, klar", ACCENT),
     "m2": ("Tiny M2" + (f" (Standard, Akzent {ACCENT:g})" if ACCENT_MODEL else ""), "M2", "männlich, ruhig", ACCENT),
 }
-if ACCENT_MODEL:
-    for vid, voice, kind in (("f2", "F2", "weiblich"), ("m2", "M2", "männlich")):
-        for suffix, label, desc, accent in (("de", "Hochdeutsch", "hochdeutsch", 0.0),
-                                            ("at", "Österreich", "österreichisch", 1.0),
-                                            ("wien", "Wien", "österreichisch mit Wiener Note", 1.3),
-                                            ("oarg", "Oarg", "kräftig österreichisch", 1.6)):
-            VOICES[f"{vid}-{suffix}"] = (f"Tiny {voice} {label}", voice, f"{kind}, {desc}", accent)
+if ACCENT_MODEL:   # short labels for the voice menu: "tiny m2 1.3" = voice m2, accent 1.3
+    for vid, voice, kind in (("m2", "M2", "männlich"), ("f2", "F2", "weiblich")):
+        for suffix, desc, accent in (("de", "hochdeutsch", 0.0), ("at", "österreichisch", 1.0),
+                                     ("wien", "österreichisch, Wiener Note", 1.3), ("oarg", "kräftig österreichisch", 1.6)):
+            VOICES[f"{vid}-{suffix}"] = (f"tiny {vid} {accent:g}" if accent == 0 else f"tiny {vid} {accent:.1f}",
+                                         voice, f"{kind}, {desc}", accent)
+
+# Even tempo: the Austrian style makes M2 up to 27 % slower, and F2 is slower than M2 to begin with. Measured seconds
+# for the same three sentences (19.11.2026); speech is sped up to TEMPO_TARGET s (never slowed down).
+# FV_TINYTTS_EVEN_TEMPO=0 switches this off.
+TEMPO = {"M2": ((0.0, 11.67), (1.0, 13.75), (1.3, 14.16), (1.6, 14.81)),
+         "F2": ((0.0, 13.72), (1.0, 13.80), (1.3, 13.86), (1.6, 14.10))}
+TEMPO_TARGET = 12.0
+EVEN_TEMPO = os.environ.get("FV_TINYTTS_EVEN_TEMPO", "1") != "0"
+
+
+def _tempo(voice: str, accent: float) -> float:
+    if not EVEN_TEMPO or voice not in TEMPO:
+        return 1.0
+    xs, ys = zip(*TEMPO[voice])
+    return max(1.0, float(np.interp(accent, xs, ys)) / TEMPO_TARGET)
 ALIASES = {"annika": "f2", "lotta": "f2", "nele": "f2", "henrik": "m2", "leon": "m2", "mika": "m2"}
 DEFAULT = os.environ.get("FV_TINYTTS_DEFAULT", "f2")
 
@@ -220,10 +234,11 @@ def _synth(text: str, voice: int, speed: float = SPEED, accent: float = 0.0) -> 
 
 def _chunks(text: str, speaker: str, accent: str = ""):
     voice, strength = _voice(speaker, accent)
+    speed = SPEED * _tempo(META["voices"][voice], strength)
     for i, part in enumerate(_parts(text)):
         if i:
             yield np.zeros(int(GAP_S * SR), dtype=np.float32)
-        yield _synth(part, voice, accent=strength)
+        yield _synth(part, voice, speed=speed, accent=strength)
 
 
 def _wav(audio: np.ndarray, sr: int = SR) -> bytes:
@@ -280,8 +295,11 @@ def speakers():
 
 @app.get("/voices")
 def voices():
-    return [{"id": vid, "label": f"{v[0]} (apptor-tiny-tts)", "description": f"{v[2]} – Deutsch, 4.5M Parameter, CPU",
-             "builtin": True, **({"accent": v[3]} if ACCENT_MODEL else {})} for vid, v in VOICES.items()]
+    # with the accent model only the fixed steps are listed (plain f2/m2 still work as ids)
+    return [{"id": vid, "label": v[0] if ACCENT_MODEL else f"{v[0]} (apptor-tiny-tts)",
+             "description": f"{v[2]} – apptor-tiny-tts, 4.5M Parameter, CPU", "builtin": True,
+             **({"accent": v[3]} if ACCENT_MODEL else {})}
+            for vid, v in VOICES.items() if not (ACCENT_MODEL and vid in ("f2", "m2"))]
 
 
 @app.get("/health")

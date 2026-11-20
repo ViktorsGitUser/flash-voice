@@ -456,7 +456,7 @@ async function boot() {
   try { info = await (await fetch("/api/info")).json(); } catch { $("stext").textContent = T.off; return; }
   if (info.auth && !info.ok) return askLogin();
   $("sdot").className = "dot ok"; $("stext").textContent = info.model || T.ready;
-  $("about").textContent = `LLM: ${info.model || "?"} · Clef: ${info.clef ? "✓" : "–"} · ${info.langs.join(", ")}`;
+  $("about").textContent = `LLM: ${info.model || "?"} · Decider: ${(info.decider ?? info.clef) ? "✓" : "–"} · ${info.langs.join(", ")}`;
   let list = []; try { list = await (await fetch("/api/voices")).json(); } catch {}
   if (!list.length) list = [{id: info.voice, label: info.voice}];
   if (!list.some(v => v.id === voiceName)) voiceName = list.some(v => v.id === info.voice) ? info.voice : list[0].id;

@@ -1,5 +1,5 @@
 """The services flash-voice talks to: the LLM (OpenAI-compatible), the voice (tts_server.py), Whisper
-(stt_server.py) and Clef (llama.cpp's llama-server with the decision model vllm-d3-mini, endpoint /v1/systemone)."""
+(stt_server.py) and the decider (llama.cpp's llama-server with the decision model vllm-d3-mini, endpoint /v1/systemone)."""
 import json
 import time
 
@@ -19,25 +19,25 @@ def transcribe(wav: bytes, fast: bool = False) -> tuple[str, str]:
     return d.get("text", ""), d.get("lang", config.LANGS[0])
 
 
-# ---------------------------------------------------------------- Clef, the decision model
-_clef = {"t": 0.0, "ok": False}
+# ---------------------------------------------------------------- the decider, a small decision model
+_decider = {"t": 0.0, "ok": False}
 
 
-def clef_ok() -> bool:
-    if not config.CLEF_URL:
+def decider_ok() -> bool:
+    if not config.DECIDER_URL:
         return False
-    if time.time() - _clef["t"] > 30:
+    if time.time() - _decider["t"] > 30:
         try:
-            ok = _http.get(config.CLEF_URL + "/health", timeout=3).status_code == 200
+            ok = _http.get(config.DECIDER_URL + "/health", timeout=3).status_code == 200
         except Exception:
             ok = False
-        _clef.update(t=time.time(), ok=ok)
-    return _clef["ok"]
+        _decider.update(t=time.time(), ok=ok)
+    return _decider["ok"]
 
 
 def decide(state: str, questions: dict) -> dict:
-    """Clef: a text + questions with fixed answers -> a probability for every answer, in one pass (~0.3 s)."""
-    r = _http.post(config.CLEF_URL + "/v1/systemone", json={"state": state, "questions": questions}, timeout=20)
+    """The decider: a text + questions with fixed answers -> a probability for every answer, in one pass (~0.3 s)."""
+    r = _http.post(config.DECIDER_URL + "/v1/systemone", json={"state": state, "questions": questions}, timeout=20)
     r.raise_for_status()
     return r.json()
 

@@ -1,7 +1,7 @@
 """flash-voice: talk with your LLM - and interrupt it like a person.
 
     GET  /                  the page (web/index.html)
-    GET  /api/info          what is set up (password?, languages, voice, Clef, model)
+    GET  /api/info          what is set up (password?, languages, voice, decider, model)
     POST /api/login         {password} -> session cookie (only when FV_PASSWORD is set)
     GET  /api/voices        the voices of the TTS service
     POST /api/transcribe    form: audio -> {"text", "lang"} (what is said in a recording)
@@ -79,7 +79,7 @@ def info(request: Request):
     ok = session_ok(request.cookies.get(COOKIE))
     return {"auth": bool(config.PASSWORD), "ok": ok, "langs": config.LANGS,
             "library": bool(clients.tts_health().get("library")) if ok else False,
-            "voice": config.VOICE, "clef": clients.clef_ok(), "model": clients.model_name() if session_ok(
+            "voice": config.VOICE, "decider": clients.decider_ok(), "clef": clients.decider_ok(), "model": clients.model_name() if session_ok(
                 request.cookies.get(COOKIE)) else ""}
 
 
@@ -154,7 +154,7 @@ async def ear_ws(ws: WebSocket):
         await ws.close(code=4401)
         return
     await ws.accept()
-    await ear.serve(ws, clients.transcribe, clients.decide, clients.clef_ok, log, config.LANGS[0])
+    await ear.serve(ws, clients.transcribe, clients.decide, clients.decider_ok, log, config.LANGS[0])
 
 
 # ---------------------------------------------------------------- one turn: the LLM's answer, spoken sentence by sentence

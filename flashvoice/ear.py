@@ -5,11 +5,11 @@ thinking / speaking) and what the assistant is saying right now (for the echo). 
 
 * Silero VAD (MIT, onnxruntime on the CPU, ~0.1 ms per frame): a human voice, or noise?
 * LISTENING: the utterance starts at the first voice (with 0.4 s before it, so the first syllable is kept). At the
-  first pause (0.4 s) Whisper writes it down and Clef is asked "is the thought finished?" - yes: the answer starts at
-  once; no ("I'd like, uhm ..."): wait up to 1.8 s of silence. Without Clef: 1.1 s of silence.
+  first pause (0.4 s) speech recognition writes it down and the decider is asked "is the thought finished?" - yes: the answer starts at
+  once; no ("I'd like, uhm ..."): wait up to 1.8 s of silence. Without the decider: 1.1 s of silence.
 * SPEAKING / THINKING: a voice for 160 ms -> "duck" (the page turns the assistant down to 25 %). Whisper writes down
   the first second: the assistant's own sentence coming back through the microphone (echo), or nothing -> "resume".
-  "mhm", "yes", "right" ... -> "resume". Otherwise Clef: interruption / just listening / talking to someone else?
+  "mhm", "yes", "right" ... -> "resume". Otherwise the decider: interruption / just listening / talking to someone else?
   Interruption -> "barge": the page stops the assistant, and the utterance goes on being heard from its first syllable.
 
 Messages to the page: ready, speech, reset, end {text, lang}, duck, resume, barge. Nothing is stored; the log only
@@ -34,9 +34,9 @@ PRE_ROLL = 13                    # frames kept before the voice starts (~0.4 s)
 START_P, KEEP_P = 0.5, 0.35      # a voice starts above START_P and goes on above KEEP_P
 LISTEN_START_FRAMES = 3          # ~100 ms of voice: someone speaks
 BARGE_START_FRAMES = 5           # while the assistant speaks: ~160 ms (echo remains and clicks are shorter)
-PAUSE_CHECK_MS = 400             # first pause: write it down, ask Clef whether the thought is finished
-END_SURE_MS = 1100               # end of turn without Clef
-END_MAX_MS = 1800                # Clef said "not finished": wait this long at most
+PAUSE_CHECK_MS = 400             # first pause: write it down, ask the decider whether the thought is finished
+END_SURE_MS = 1100               # end of turn without the decider
+END_MAX_MS = 1800                # the decider said "not finished": wait this long at most
 MAX_UTTER_S = 30
 BARGE_DECIDE_MS = 700            # voice this long while the assistant speaks: decide (or earlier, when it stops)
 BARGE_FORCE_MS = 2500            # still speaking after this long: an interruption, whatever else
@@ -137,11 +137,11 @@ def is_echo(heard: str, said: str) -> bool:
 
 
 class Ear:
-    """One per WebSocket. transcribe(wav, fast) -> (text, lang); decide(state, questions) -> Clef's answers;
-    clef_ok() -> bool; log(str)."""
-    def __init__(self, ws, transcribe, decide, clef_ok, log, lang: str = "de"):
-        self.ws, self.transcribe, self.decide, self.clef_ok, self.log = ws, transcribe, decide, clef_ok, log
-        self.lang = lang                       # the language last heard (Clef's questions in the same language)
+    """One per WebSocket. transcribe(wav, fast) -> (text, lang); decide(state, questions) -> the decider's answers;
+    decider_ok() -> bool; log(str)."""
+    def __init__(self, ws, transcribe, decide, decider_ok, log, lang: str = "de"):
+        self.ws, self.transcribe, self.decide, self.decider_ok, self.log = ws, transcribe, decide, decider_ok, log
+        self.lang = lang                       # the language last heard (the decider's questions in the same language)
         self.vad = Vad()
         self.mode = "listening"
         self.pre = collections.deque(maxlen=PRE_ROLL)
@@ -157,7 +157,7 @@ class Ear:
         self.voiced = 0.0        # ms of voice in the utterance
         self.silence = 0.0       # ms of silence since the last voice
         self.checked = None      # (frames, text, lang, finished) of the last pause check
-        self.task = None         # a running Whisper/Clef check
+        self.task = None         # a running speech recognition / decider check
         self.barge = None        # while the assistant speaks: None, "ducked", "deciding"
         self.last_voice = 0      # index of the last frame with voice in utt
         self.ptask = None        # a running live transcript (partial)
@@ -245,10 +245,10 @@ class Ear:
             self.task = asyncio.create_task(self.pause_check(len(self.utt), self.gen))
         if self.checked and self.checked[3] is True and self.silence >= PAUSE_CHECK_MS:
             return await self.finish()
-        if self.checked:   # Clef: not finished -> wait longer; no answer from Clef -> the usual pause
+        if self.checked:   # decider: not finished -> wait longer; no answer from it -> the usual pause
             limit = END_MAX_MS if self.checked[3] is False else END_SURE_MS
-        else:              # the check is still running (or there is no Clef)
-            limit = END_MAX_MS if self.clef_ok() else END_SURE_MS
+        else:              # the check is still running (or there is no decider)
+            limit = END_MAX_MS if self.decider_ok() else END_SURE_MS
         if self.silence >= limit and self.task is None:
             await self.finish()
 
@@ -265,13 +265,13 @@ class Ear:
                 self.ptask = None
 
     async def pause_check(self, n: int, gen: int):
-        """At the first pause: write it down, ask Clef whether the thought is finished."""
+        """At the first pause: write it down, ask the decider whether the thought is finished."""
         try:
             t0 = time.time()
             text, lang = await asyncio.to_thread(self.transcribe, wav_bytes(self.utt[:n]), False)
             t1 = time.time()
             finished = None
-            if self.clef_ok() and text.strip() and not JUNK.fullmatch(text):
+            if self.decider_ok() and text.strip() and not JUNK.fullmatch(text):
                 try:
                     r = await asyncio.to_thread(self.decide, _texts(lang)["said"].format(t=text), finished_q(lang))
                     finished = r["answers"]["f"]["noul"] >= 0.6
@@ -281,8 +281,8 @@ class Ear:
                 return
             if self.utt is not None and self.last_voice <= n:
                 self.checked = (n, text, lang, finished)
-                self.log(f"pause: {'finished' if finished else 'not finished' if finished is False else 'no Clef'} "
-                         f"(Whisper {t1 - t0:.2f} s, Clef {time.time() - t1:.2f} s)")
+                self.log(f"pause: {'finished' if finished else 'not finished' if finished is False else 'no decider'} "
+                         f"(STT {t1 - t0:.2f} s, decider {time.time() - t1:.2f} s)")
         except Exception as e:
             self.log(f"pause check: {e}")
             if gen == self.gen:   # no second try at every frame: the end of the turn comes by the pause alone
@@ -342,7 +342,7 @@ class Ear:
                 verdict = "listens"
             elif len(words) >= 4 and self.voiced >= 1000:
                 verdict = "interrupts"
-            elif self.clef_ok():
+            elif self.decider_ok():
                 try:
                     r = await asyncio.to_thread(self.decide, _texts(lang)["barge_state"].format(said=said[-400:], t=text),
                                                 barge_q(lang))
@@ -354,7 +354,7 @@ class Ear:
             if gen != self.gen or self.barge != "deciding":
                 return
             if verdict == "interrupts":
-                await self.do_barge("Clef: interruption")
+                await self.do_barge("decider: interruption")
             else:
                 self.log(f"{verdict} - go on")
                 await self.send(e="resume")
@@ -375,15 +375,15 @@ class Ear:
         await self.send(e="barge")
 
 
-async def serve(ws, transcribe, decide, clef_ok, log, lang="de"):
+async def serve(ws, transcribe, decide, decider_ok, log, lang="de"):
     """Run one WebSocket (already accepted) until it closes."""
     if not MODEL.exists():
         await ws.send_text(json.dumps({"e": "err", "text": "models/silero_vad.onnx missing"}))
         return await ws.close()
-    ok = await asyncio.to_thread(clef_ok)
-    ear = Ear(ws, transcribe, decide, clef_ok, lambda m: log(f"[ear] {m}"), lang)
-    await ear.send(e="ready", clef=ok)
-    log("[ear] connected" + (" (with Clef)" if ok else " (without Clef)"))
+    ok = await asyncio.to_thread(decider_ok)
+    ear = Ear(ws, transcribe, decide, decider_ok, lambda m: log(f"[ear] {m}"), lang)
+    await ear.send(e="ready", decider=ok, clef=ok)   # clef: old name
+    log("[ear] connected" + (" (with the decider)" if ok else " (without the decider)"))
     try:
         while True:
             msg = await ws.receive()

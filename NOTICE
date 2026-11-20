@@ -11,7 +11,7 @@ Models (downloaded on first use)
   Fluid Speech Pro (optional)                FluidVoice            CC BY 4.0
       Fluid Speech Pro by FluidVoice. Built on NVIDIA Parakeet TDT 0.6B v3 and Moondream Parakeet Ultra.
       huggingface.co/FluidVoice-Labs/fluid-speech-pro
-  clef-flash (GGUF by bartowski)             Cloudflare            Apache-2.0
+  vllm-d3-mini, the decider (GGUF ggml-org)  vllm-sr               Apache-2.0
   Phonon phonon-31m-en (optional)            Gradium               Apache-2.0
   Phonon phonon-40m-de (optional)            Gradium               CC BY-NC 4.0 (non-commercial only)
   apptor-tiny-tts German / Austrian (opt.)   this repository       Apache-2.0 (huggingface.co/apptor/apptor-tiny-tts, -at)

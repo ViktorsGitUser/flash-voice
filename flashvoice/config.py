@@ -28,7 +28,8 @@ SYSTEM_PROMPT = E("FV_SYSTEM_PROMPT", "")         # empty: the built-in one (sho
 # the services
 TTS_URL = E("FV_TTS_URL", "http://127.0.0.1:8086").rstrip("/")
 STT_URL = E("FV_STT_URL", "http://127.0.0.1:8087").rstrip("/")
-CLEF_URL = E("FV_CLEF_URL", "http://127.0.0.1:8088").rstrip("/")   # empty or unreachable: simple rules instead
+# the decider (a small decision model in llama-server); empty or unreachable: simple rules instead. FV_CLEF_URL: old name
+DECIDER_URL = E("FV_DECIDER_URL", E("FV_CLEF_URL", "http://127.0.0.1:8088")).rstrip("/")
 LANGS = tuple(x.strip() for x in E("FV_LANGS", "en,de").split(",") if x.strip())
 VOICE = E("FV_VOICE", "serena")
 # the page

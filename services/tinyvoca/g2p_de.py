@@ -8,6 +8,7 @@ without needing the eSpeak program (GPL-3.0) at run time. A small hand-written l
     words(piece) -> [[(phone, stress), ...], ...]      # drop-in for tiny_voca.text.espeak_words
 """
 import json
+import re
 import os
 from pathlib import Path
 
@@ -20,6 +21,15 @@ MARKS = {"ˈ": 1, "ˌ": 2}
 # Hand-written readings (word -> phones with stress marks, space separated), used before the model: mostly first
 # names, where the eSpeak readings (and so the model) put the stress on the wrong syllable.
 EXCEPTIONS = {
+    # French loan word: "Soße", not "Sau-ke"; Datum: long a, stress on it (the model said "da-TUUM")
+    "Sauce": "z oːˈ s ə", "Saucen": "z oːˈ s ə n", "sauce": "z oːˈ s ə", "saucen": "z oːˈ s ə n",
+    "Datum": "d ɑːˈ t ʊ m", "Datums": "d ɑːˈ t ʊ m s",
+    # mathematics (the model put the stress on the wrong syllable)
+    "Mathematik": "m a t eː m a t iːˈ k", "Mathematiker": "m a t eː m ɑːˈ t ɪ k ɜ",
+    "Mathematikerin": "m a t eː m ɑːˈ t ɪ k ə r ɪ n", "mathematisch": "m a t eː m ɑːˈ t ɪ ʃ",
+    "mathematische": "m a t eː m ɑːˈ t ɪ ʃ ə", "mathematischen": "m a t eː m ɑːˈ t ɪ ʃ ə n",
+    "Theorem": "t eː oː r eːˈ m", "Theoreme": "t eː oː r eːˈ m ə", "Logarithmus": "l oː ɡ a r ɪˈ t m ʊ s",
+    "Imaginärteil": "ɪ m a ɡ i n ɛːˈ ɾ t aɪˌ l", "imaginär": "ɪ m a ɡ i n ɛːˈ ɾ",
     "Helene": "h eː l eːˈ n ə",
     "Diana": "d i aˈ n ɑː",
     "Dianna": "d i aˈ n ɑː",
@@ -209,6 +219,10 @@ ENGLISH = {
     "Instagram": "ɪˈ n s t a ɡ r ɛ m",
 }
 _ENGLISH_LOWER = {k.lower(): v for k, v in ENGLISH.items()}
+# the same spellings as the web page's exceptions-de.json: as written, lower case, upper case, capitalised
+_EXCEPTIONS_ANY_CASE = {v: p for k, p in reversed(list(EXCEPTIONS.items()))
+                        for v in (k.lower(), k.upper(), k[:1].upper() + k[1:])}
+_EXCEPTIONS_ANY_CASE.update(EXCEPTIONS)
 
 # Austrian standard pronunciation (Österreichisches Wörterbuch) where the German German reading differs: used only
 # when the Austrian accent is on (austrian=True), so the Hochdeutsch voices keep the German reading.
@@ -222,7 +236,14 @@ AUSTRIAN = {
     "Motor": "m oː t oːˈ ɾ", "Platin": "p l a t iːˈ n", "Billard": "b ɪ j ɑːˈ ɾ", "Garage": "ɡ a r ɑːˈ ʃ",
     # western-Austrian "scht" crept into the accent here; lenis d (as said in Vienna) keeps a clean s
     "Donnerstag": "d ɔˈ n ɐ s d ɑː k", "Donnerstags": "d ɔˈ n ɐ s d ɑː k s",
+    "Mathematik": "m a t eː m ɑːˈ t ɪ k", "Spaß": "ʃ p aˈ s", "Geschoss": "ɡ ə ʃ oːˈ s", "Geschoß": "ɡ ə ʃ oːˈ s",
+    "Anis": "ɑːˈ n ɪ s",
 }
+
+# compounds ending in these words (Tomatensauce, Geburtsdatum): the first part as the model reads it, then this
+# (a phone with ˈ = the main stress moves to this part: Hypothese, Synthese, Prothese)
+SUFFIXES = (("saucen", "z oːˌ s ə n"), ("sauce", "z oːˌ s ə"), ("datums", "d ɑːˌ t ʊ m s"), ("datum", "d ɑːˌ t ʊ m"),
+            ("thesen", "t eːˈ z ə n"), ("these", "t eːˈ z ə"))
 
 _state = {}
 
@@ -274,16 +295,44 @@ def _kaffee(w, units):
 
 def word(w, austrian=False):
     """One written word -> [(phone, stress), ...]."""
-    return _kaffee(w, _word(w, austrian))
+    units = _kaffee(w, _word(w, austrian))
+    return _austrian_rules(w, units) if austrian else units
+
+
+_IG_ICH = re.compile(r"ig(?=$|[^aeiouäöüy])|ich", re.I)
+
+
+def _austrian_rules(w, units):
+    """Austrian standard pronunciation, systematic (not word by word):
+    - final -ig as [ik]: König, zwanzig, fertig, Möglichkeit (also before a consonant: -igkeit, -iglich, -igs)
+    - s is voiceless: Sonne, sagen, Rose
+    - Chem-, Chin-, Chir- with k: Chemotherapie, chinesisch, chirurgisch"""
+    units = [("s" if u == "z" else u, st) for u, st in units]
+    spelled = [m[0].lower() for m in _IG_ICH.finditer(w)]
+    if "ig" in spelled:
+        pairs = [i for i in range(len(units) - 1) if units[i][0] == "ɪ" and units[i + 1][0] == "ç"]
+        if len(pairs) == len(spelled):   # one [ɪç] for each spelled -ig/-ich: change the -ig ones
+            for i, sp in zip(pairs, spelled):
+                if sp == "ig":
+                    units[i + 1] = ("k", units[i + 1][1])
+    if w.lower().startswith(("chem", "chin", "chir")) and units and units[0][0] in ("ç", "ʃ", "x"):
+        units[0] = ("k", units[0][1])
+    return units
 
 
 def _word(w, austrian=False):
     if austrian and w in AUSTRIAN:
         return _units(AUSTRIAN[w])
-    if w in EXCEPTIONS:
-        return _units(EXCEPTIONS[w])
+    if w in _EXCEPTIONS_ANY_CASE:
+        return _units(_EXCEPTIONS_ANY_CASE[w])
     if w.lower() in _ENGLISH_LOWER:
         return _units(_ENGLISH_LOWER[w.lower()])
+    for suffix, phones in SUFFIXES:
+        if w.lower().endswith(suffix) and len(w) > len(suffix) + 1:
+            first = _word(w[:-len(suffix)], austrian)
+            if "ˈ" in phones:   # the main stress is on the last part: the first part keeps no stress
+                first = [(u, 0) for u, _ in first]
+            return first + _units(phones)
     s = _load()
     cache = s["cache"]
     if w in cache:
@@ -316,13 +365,13 @@ def phonemize(text, austrian=False):
     """Text -> tokens like tiny_voca.text.phonemize, with this model instead of eSpeak NG. ``austrian``: use the
     Austrian readings (AUSTRIAN) - for the accent switch of apptor-tiny-tts-at."""
     try:
-        from tiny_voca.normalize_de import normalize as normalize_german
+        from tiny_voca.normalize_de import normalize as normalize_german, prepare
         from tiny_voca.text import chunks, normalize_text, tokenize
     except ImportError:   # flash-voice vendors the front end as "tinyvoca"
-        from tinyvoca.normalize_de import normalize as normalize_german
+        from tinyvoca.normalize_de import normalize as normalize_german, prepare
         from tinyvoca.text import chunks, normalize_text, tokenize
     if not isinstance(text, str) or not text.strip():
         raise ValueError("text must not be empty")
     pieces = [(True, p) if punct else (False, words(p, austrian))
-              for punct, p in chunks(normalize_text(normalize_german(normalize_text(text))))]
+              for punct, p in chunks(normalize_text(normalize_german(normalize_text(prepare(text)))))]
     return tokenize(pieces)

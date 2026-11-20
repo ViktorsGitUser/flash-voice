@@ -5,6 +5,11 @@ before months, percent, years). Used for annotation, training and inference alik
 import re
 
 try:
+    from .math_de import speak_math
+except ImportError:
+    from math_de import speak_math
+
+try:
     from num2words import num2words as _n2w
 except ImportError:  # eSpeak still reads plain numbers; only the special forms need num2words
     _n2w = None
@@ -46,6 +51,14 @@ def _money(match):
     euros, cents = int(match[1]), int(match[2])
     text = f"{_num(euros)} Euro"
     return text + (f" {_num(cents)}" if cents else "")
+
+
+def prepare(text):
+    """First of all, on the raw text (before quotes and brackets are unified): abbreviations, then formulas, LaTeX
+    and symbols -> words ("ζ(s) = 1/2" -> "Zeta von ess gleich ein halb"). normalize() does the rest."""
+    for short, long in ABBREVIATIONS.items():
+        text = text.replace(short, long)
+    return speak_math(text)
 
 
 def normalize(text):

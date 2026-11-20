@@ -270,8 +270,8 @@ def phonemize(text):
     if _frontend == "own":
         return tokenize(_dizione().pieces(text))
     pieces = []
-    from .normalize_de import normalize as normalize_german
-    for punctuation, piece in chunks(normalize_text(normalize_german(normalize_text(text)))):
+    from .normalize_de import normalize as normalize_german, prepare
+    for punctuation, piece in chunks(normalize_text(normalize_german(normalize_text(prepare(text))))):
         pieces.append((True, piece) if punctuation else (False, espeak_words(piece)))
     return tokenize(pieces)
 

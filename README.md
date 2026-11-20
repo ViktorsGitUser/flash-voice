@@ -196,7 +196,8 @@ accent) and is ~10x faster. The model does not report the language; the server p
 recognised. Only these three languages, no `auto` – for other languages use Whisper.
 `FV_FLUID_LIB` = path to `libparakeet.so` (the start script finds `parakeet.cpp/build/libparakeet.so`).
 Without a GPU: `FV_FLUID_BACKEND=onnx` with the int8 ONNX export (FluidVoice-Labs/fluid-speech-pro-onnx,
-`FV_FLUID_MODEL=<folder>`, `pip install onnx-asr onnxruntime`), ~0.9 s per sentence on four CPU threads.
+`FV_FLUID_MODEL=<folder>`, `pip install onnx-asr onnxruntime`), ~0.9 s per sentence on four CPU threads of a
+desktop/server CPU.
 Fluid Speech Pro is CC BY 4.0, not Apache: keep the attribution (see NOTICE) when you ship it.
 
 ### Ears: Whisper large-v3-turbo
@@ -305,6 +306,8 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
 | `FV_LANGS` | `en,de` | what the ears choose from; the decider's questions follow the language heard |
 | `FV_VOICE` | `serena` | a voice id of the voice service (unknown ids: its default voice) |
 | `FV_HOST` / `FV_PORT` | `127.0.0.1` / `8099` | |
+| `FV_PARTIALS` | `auto` | live transcript while you speak; auto = off when speech recognition is slow (a CPU) |
+| `FV_SEGMENTS` | `auto` | write down in pieces at short gaps while you speak, so only the last piece is left at the pause; auto = when speech recognition is slow |
 | `FV_PASSWORD` | – | set it when other devices can reach the page |
 | `FV_CERT` / `FV_KEY` | – | paths, or `FV_CERT=self` |
 
@@ -316,6 +319,14 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
   ("could you pass the water?"). Clear cases (a name or "honey", the TV, a sports commentator) are recognised; when in
   doubt it rather stops once too often than talks over you.
 - flash-turn knows English and German; in other languages the pause rules decide.
+- **Laptops:** the ears are the heavy part on a CPU. On an office laptop (i5-8365U, 4 cores) plugged in, it works with
+  a short pause after you stop speaking; on battery Windows clocks the CPU down (1.5 GHz) and Fluid gets slower
+  than real time - a long sentence then takes ~6 s. Plug in, or pick the "Best performance" power mode. The page shows
+  "One moment ..." as soon as the pause is noticed. Intel graphics (onnxruntime DirectML) did not help (slower than the
+  CPU with the int8 model).
+- **Windows 11 Smart App Control** blocks unsigned DLLs and the `.exe` launchers of a fresh venv: use `python -m pip`
+  instead of `pip`, `python -m flashvoice` instead of scripts; Phonon (its native library is unsigned) may be blocked -
+  the German apptor-tiny-tts voice runs. In Docker (Open WebUI package) none of this applies.
 - The page keeps the conversation in the browser (last 60 messages). There are no tools, files or memory – this is the
   voice, bring your own brain.
 

@@ -352,8 +352,9 @@ function earOpen() {
 }
 function earEvent(m) {
   if (!vOn) return;
-  if (m.e === "speech") { earSpoke = performance.now(); if (vState === "listening") vstate("listening", T.hearing, ""); }
+  if (m.e === "speech") { earSpoke = performance.now(); if (vState === "listening") { if (m.again) vstate("listening", T.hearing); else vstate("listening", T.hearing, ""); } }
   else if (m.e === "partial") { earSpoke = performance.now(); if (vState === "listening") vstate("listening", T.hearing, "“" + (m.text.length > 140 ? "…" + m.text.slice(-140) : m.text) + "”"); }
+  else if (m.e === "pause") { if (vState === "listening") vstate("listening", T.moment); }
   else if (m.e === "reset") { if (vState === "listening") vstate("listening", T.yourTurn, T.speakNow); }
   else if (m.e === "end") { earSpoke = performance.now(); dTurn(m.text, m.lang); }
   else if (m.e === "duck") duck(true);

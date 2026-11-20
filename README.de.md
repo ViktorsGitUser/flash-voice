@@ -224,6 +224,14 @@ Im Auto über Bluetooth übernimmt das Auto die Echo-Unterdrückung – dort mac
   Wasser?“). Klare Fälle (ein Name oder „Schatz“, der Fernseher, ein Sportkommentator) werden erkannt; im Zweifel
   lieber einmal zu oft still als drüberreden.
 - flash-turn kann Englisch und Deutsch; in anderen Sprachen entscheiden die Pausen-Regeln.
+- **Laptops:** Auf der CPU sind die Ohren der schwere Teil. Auf einem Büro-Laptop (i5-8365U, 4 Kerne) am Netzteil geht
+  es mit einer kurzen Pause nach dem Sprechen; im Akkubetrieb taktet Windows die CPU herunter (1,5 GHz), Fluid
+  wird langsamer als Echtzeit, ein langer Satz braucht dann ~6 s. Netzteil anstecken oder Energiemodus „Beste
+  Leistung“. Die Seite zeigt „Moment …“, sobald die Pause erkannt ist. Bei langsamer Erkennung schreiben die Ohren
+  schon während des Sprechens stückweise mit (`FV_SEGMENTS`, `FV_PARTIALS`, siehe englische README).
+- **Windows 11 Smart App Control** blockiert unsignierte DLLs und die `.exe`-Starter einer frischen venv: `python -m pip`
+  statt `pip`, `python -m flashvoice`; Phonon (unsignierte Bibliothek) kann blockiert sein, die deutsche
+  apptor-tiny-tts-Stimme läuft. Im Docker-Paket (Open WebUI) betrifft das alles nicht.
 - Keine Werkzeuge, Dateien oder Gedächtnis – das ist die Stimme, das Gehirn bringst du mit.
 
 ## Lizenz

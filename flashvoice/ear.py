@@ -12,7 +12,7 @@ thinking / speaking) and what the assistant is saying right now (for the echo). 
   "mhm", "yes", "right" ... -> "resume". Otherwise the decider: interruption / just listening / talking to someone else?
   Interruption -> "barge": the page stops the assistant, and the utterance goes on being heard from its first syllable.
 
-Messages to the page: ready, speech, reset, end {text, lang}, duck, resume, barge. Nothing is stored; the log only
+Messages to the page: ready, speech, partial, pause, reset, end {text, lang}, duck, resume, barge. Nothing is stored; the log only
 has the steps, never what was said.
 """
 import asyncio
@@ -40,6 +40,11 @@ END_MAX_MS = 1800                # the decider said "not finished": wait this lo
 MAX_UTTER_S = 30
 BARGE_DECIDE_MS = 700            # voice this long while the assistant speaks: decide (or earlier, when it stops)
 BARGE_FORCE_MS = 2500            # still speaking after this long: an interruption, whatever else
+PARTIALS = __import__("os").environ.get("FV_PARTIALS", "auto")   # live transcript: auto | on | off
+SEGMENTS = __import__("os").environ.get("FV_SEGMENTS", "auto")   # write down while speaking: auto (if slow) | on | off
+SLOW_S, SLOW_RTF = 0.6, 0.25     # speech recognition slower than this (and than 1/4 of the audio) = slow (a CPU)
+SEG_GAP_MS = 200                 # a short gap in the voice (a breath, between phrases): write down what came before
+SEG_MIN_MS = 1200                # ... once it is this long (shorter pieces lose too much context)
 _BC = (r"m+h*m+|hm+|uh[- ]?huh|aha|ah|oh|ja+|jo|jaja|genau|okay|ok|gut|stimmt|richtig|super|alles klar|verstehe|"
        r"achso|ach so|na ja|nein|nee|danke|yes|yeah|yep|yup|right|sure|cool|nice|i see|got it|true|no|nope|thanks")
 BACKCHANNEL = re.compile(rf"(?i)^\W*(?:{_BC})(?:\W+(?:{_BC}))*\W*$")   # one or more: "ja genau", "okay, alles klar"
@@ -111,6 +116,7 @@ class Ear:
         self.buf = np.zeros(0, dtype=np.float32)
         self.said = collections.deque(maxlen=4)     # the assistant's last sentences (echo)
         self.barged = 0.0
+        self.slow = False                       # slow speech recognition (a CPU): see went_slow
         self.reset()
 
     def reset(self):
@@ -125,6 +131,27 @@ class Ear:
         self.last_voice = 0      # index of the last frame with voice in utt
         self.ptask = None        # a running live transcript (partial)
         self.plast = 0.0         # when the last one started
+        self.segs = []           # pieces already written down while the person speaks: (end frame, text, lang)
+        self.seg_end = 0         # frames up to here are written down
+        self.stask = None        # a running piece
+        self.paused = False      # the page was told "pause" (it shows "one moment")
+
+    @property
+    def partials(self) -> bool:
+        return PARTIALS == "on" or (PARTIALS == "auto" and not self.slow)
+
+    @property
+    def segments(self) -> bool:
+        return SEGMENTS == "on" or (SEGMENTS == "auto" and self.slow)
+
+    def went_slow(self, secs: float, audio_s: float):
+        """Speech recognition is slow here (a CPU): live transcripts would queue up in front of the check at the pause
+        (8-9 s instead of ~2 s on a laptop). Instead: write down in pieces at short gaps while the person speaks, so at
+        the pause only the last piece is left."""
+        if not self.slow and secs > SLOW_S and secs > SLOW_RTF * audio_s:
+            self.slow = True
+            self.log(f"slow speech recognition ({secs:.1f} s for {audio_s:.1f} s): "
+                     "no live transcript, writing down in pieces while the person speaks")
 
     async def send(self, **k):
         try:
@@ -183,15 +210,21 @@ class Ear:
             self.voiced += FRAME_MS
             self.silence = 0.0
             self.last_voice = len(self.utt)
+            if self.paused and self.mode == "listening":
+                self.paused = False
+                await self.send(e="speech", again=True)   # spoke on: listening again
             if self.checked and self.checked[0] < self.last_voice:
                 self.checked = None   # spoke on after the pause: the old check is out of date
         else:
             self.silence += FRAME_MS
         if self.mode == "listening":
-            if (self.ptask is None and self.task is None and self.voiced >= 600 and self.silence < 300
-                    and time.time() - self.plast >= 1.0):
+            if (self.partials and self.ptask is None and self.task is None and self.voiced >= 600
+                    and self.silence < 300 and time.time() - self.plast >= 1.0):
                 self.plast = time.time()
                 self.ptask = asyncio.create_task(self.partial(list(self.utt), self.gen))
+            if (self.segments and self.stask is None and self.task is None and SEG_GAP_MS <= self.silence < PAUSE_CHECK_MS
+                    and (self.last_voice - self.seg_end) * FRAME_MS >= SEG_MIN_MS):
+                self.stask = asyncio.create_task(self.segment(self.seg_end, len(self.utt), self.gen))
             await self.listening()
         else:
             await self.speaking()
@@ -206,6 +239,9 @@ class Ear:
             return await self.send(e="reset")
         if self.silence >= PAUSE_CHECK_MS and self.checked is None and self.task is None:
             self.task = asyncio.create_task(self.pause_check(len(self.utt), self.gen))
+            if not self.paused:
+                self.paused = True
+                await self.send(e="pause")   # at once, so the person sees the pause was noticed (slow CPUs)
         if self.checked and self.checked[3] is True and self.silence >= PAUSE_CHECK_MS:
             return await self.finish()
         if self.checked:   # decider: not finished -> wait longer; no answer from it -> the usual pause
@@ -218,7 +254,9 @@ class Ear:
     async def partial(self, frames: list, gen: int):
         """What has been said so far (Whisper's quick mode, the last 20 s) - the page shows it while the person speaks."""
         try:
+            t0 = time.time()
             text, _ = await asyncio.to_thread(lambda: self.transcribe(wav_bytes(frames[-625:]), True))
+            self.went_slow(time.time() - t0, len(frames[-625:]) * FRAME_MS / 1000)
             if gen == self.gen and self.utt is not None and self.mode == "listening" and text.strip():
                 await self.send(e="partial", text=text.strip())
         except Exception:
@@ -227,11 +265,49 @@ class Ear:
             if gen == self.gen:
                 self.ptask = None
 
+    async def segment(self, a: int, b: int, gen: int):
+        """Slow mode: write down frames a..b (they end in a short gap) while the person goes on speaking."""
+        frames = self.utt[a:b]
+        try:
+            text, lang = await asyncio.to_thread(self.transcribe, wav_bytes(frames), False)
+            if gen == self.gen and self.seg_end == a:
+                self.segs.append((b, text.strip(), lang))
+                self.seg_end = b
+                so_far = " ".join(t for _, t, _ in self.segs if t)
+                if so_far and self.mode == "listening":
+                    await self.send(e="partial", text=so_far)   # the live transcript, for free
+        except Exception as e:
+            self.log(f"piece: {e}")
+        finally:
+            if gen == self.gen:
+                self.stask = None
+
+    async def text_upto(self, frames: list, n: int, gen: int) -> tuple[str, str]:
+        """What was said in frames[:n]: the pieces already written down + the rest."""
+        if self.stask is not None:
+            try:
+                await asyncio.shield(self.stask)
+            except Exception:
+                pass
+        segs = [x for x in self.segs if x[0] <= n] if gen == self.gen else []
+        a = segs[-1][0] if segs else 0
+        parts = [(t, l) for _, t, l in segs if t]
+        if (n - a) * FRAME_MS >= 250 or not parts:   # after the last piece: more than a breath
+            t0 = time.time()
+            text, lang = await asyncio.to_thread(self.transcribe, wav_bytes(frames[a:n]), False)
+            self.went_slow(time.time() - t0, (n - a) * FRAME_MS / 1000)
+            parts.append((text.strip(), lang))
+        if len(parts) > 1:
+            self.log(f"{len(parts)} pieces, {(n - a) * FRAME_MS / 1000:.1f} s left at the pause")
+        text = " ".join(t for t, _ in parts if t)
+        lang = max(parts, key=lambda x: len(x[0]))[1] if parts else self.lang
+        return text, lang
+
     async def pause_check(self, n: int, gen: int):
         """At the first pause: write it down, ask the decider whether the thought is finished."""
         try:
             t0 = time.time()
-            text, lang = await asyncio.to_thread(self.transcribe, wav_bytes(self.utt[:n]), False)
+            text, lang = await self.text_upto(self.utt, n, gen)
             t1 = time.time()
             finished = None
             if self.decider_ok() and text.strip() and not JUNK.fullmatch(text):
@@ -256,17 +332,17 @@ class Ear:
             await self.listening()
 
     async def finish(self):
-        frames, chk, last = self.utt, self.checked, self.last_voice
-        self.reset()
+        frames, chk, last, gen = self.utt, self.checked, self.last_voice, self.gen
         self.mode = "thinking"   # until the page says otherwise
         if chk and chk[1] is not None and chk[0] >= last:   # nothing said since the pause check: its text
             text, lang = chk[1], chk[2]
-        else:
+        else:                    # spoke on after the check: the pieces written down so far still count
             try:
-                text, lang = await asyncio.to_thread(self.transcribe, wav_bytes(frames), False)
+                text, lang = await self.text_upto(frames, len(frames), gen)
             except Exception as e:
                 self.log(f"speech recognition: {e}")
                 text, lang = "", self.lang
+        self.reset()
         if not text.strip() or JUNK.fullmatch(text):
             self.log("nothing understandable - dropped")
             self.mode = "listening"

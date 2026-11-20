@@ -93,8 +93,8 @@ if ACCENT_MODEL:   # short labels for the voice menu: "tiny m2 1.3" = voice m2, 
 # Even tempo: the Austrian style makes M2 up to 27 % slower, and F2 is slower than M2 to begin with. Measured seconds
 # for the same three sentences (19.11.2026); speech is sped up to TEMPO_TARGET s (never slowed down).
 # FV_TINYTTS_EVEN_TEMPO=0 switches this off.
-TEMPO = {"M2": ((0.0, 11.67), (1.0, 13.75), (1.3, 14.16), (1.6, 14.81)),
-         "F2": ((0.0, 13.72), (1.0, 13.80), (1.3, 13.86), (1.6, 14.10))}
+TEMPO = {"M2": ((0.0, 11.72), (1.0, 13.79), (1.3, 14.23), (1.6, 14.70)),   # measured on apptor-tiny-tts-at v0.2
+         "F2": ((0.0, 13.73), (1.0, 13.99), (1.3, 14.07), (1.6, 14.03))}
 TEMPO_TARGET = 12.0
 EVEN_TEMPO = os.environ.get("FV_TINYTTS_EVEN_TEMPO", "1") != "0"
 

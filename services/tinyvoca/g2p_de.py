@@ -256,8 +256,28 @@ def _units(text):
     return out
 
 
+def _kaffee(w, units):
+    """"Kaffee" always with a long, stressed "ee" (as said in Austria; the unstressed eː came out short), also in
+    compounds: Kaffeetasse -> main stress on the ee, Eiskaffee -> secondary stress on it."""
+    if "kaffee" not in w.lower():
+        return units
+    phones = [u for u, _ in units]
+    for i in range(len(phones) - 3):
+        if phones[i:i + 4] == ["k", "a", "f", "eː"]:
+            lead = w.lower().startswith("kaffee")
+            out = [(u, 2 if lead and s == 1 else s) for u, s in units]
+            out[i + 1] = ("a", 0)
+            out[i + 3] = ("eː", 1 if lead else (units[i + 3][1] or 2))
+            return out
+    return units
+
+
 def word(w, austrian=False):
     """One written word -> [(phone, stress), ...]."""
+    return _kaffee(w, _word(w, austrian))
+
+
+def _word(w, austrian=False):
     if austrian and w in AUSTRIAN:
         return _units(AUSTRIAN[w])
     if w in EXCEPTIONS:

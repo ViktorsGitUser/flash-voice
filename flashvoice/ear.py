@@ -40,50 +40,12 @@ END_MAX_MS = 1800                # the decider said "not finished": wait this lo
 MAX_UTTER_S = 30
 BARGE_DECIDE_MS = 700            # voice this long while the assistant speaks: decide (or earlier, when it stops)
 BARGE_FORCE_MS = 2500            # still speaking after this long: an interruption, whatever else
-BACKCHANNEL = re.compile(
-    r"(?i)^\W*(m+h*m+|hm+|uh[- ]?huh|aha|ah|oh|ja+|jo|jaja|genau|okay|ok|gut|stimmt|richtig|super|alles klar|verstehe|"
-    r"achso|ach so|na ja|nein|nee|danke|yes|yeah|yep|yup|right|sure|cool|nice|i see|got it|true|no|nope|thanks)\W*$")
+_BC = (r"m+h*m+|hm+|uh[- ]?huh|aha|ah|oh|ja+|jo|jaja|genau|okay|ok|gut|stimmt|richtig|super|alles klar|verstehe|"
+       r"achso|ach so|na ja|nein|nee|danke|yes|yeah|yep|yup|right|sure|cool|nice|i see|got it|true|no|nope|thanks")
+BACKCHANNEL = re.compile(rf"(?i)^\W*(?:{_BC})(?:\W+(?:{_BC}))*\W*$")   # one or more: "ja genau", "okay, alles klar"
 # Whisper's well-known hallucinations on silence and noise
 JUNK = re.compile(r"(?i)\W*(untertitel.*|vielen dank\.?|thank you\.?|thanks for watching.*|bye\.?|tschüss\.?|"
                   r"subtitles by.*|amara\.org.*)\W*")
-TEXTS = {
-    "de": {
-        "said": "Der Mensch sagt: „{t}“",
-        "finished": "Ist die Äußerung des Menschen ein abgeschlossener Gedanke (fertige Frage oder Aussage), auf den man "
-                    "jetzt antworten kann? Nein, wenn der Satz mitten drin aufhört oder er offensichtlich noch weiterreden will.",
-        "barge_state": "Der Sprachassistent sagt gerade: „{said}“\nDer Mensch sagt dazwischen: „{t}“",
-        "barge_q": "Was tut der Mensch, während der Assistent spricht?",
-        "interrupts": "Er spricht den Assistenten an: eine Frage, ein Einwand, eine Korrektur, ein Wunsch, oder er sagt stopp/warte",
-        "listens": "Nur ein kurzes Zuhör-Signal wie mhm, ja, genau, okay, aha, oder ein Lachen",
-        "other": "Er redet mit einer anderen Person oder es ist Hintergrund (Radio, Fernseher)",
-    },
-    "en": {
-        "said": "The person says: \"{t}\"",
-        "finished": "Is what the person said a finished thought (a complete question or statement) that can be answered "
-                    "now? No if the sentence stops in the middle or they obviously want to go on.",
-        "barge_state": "The voice assistant is saying: \"{said}\"\nThe person says in between: \"{t}\"",
-        "barge_q": "What is the person doing while the assistant speaks?",
-        "interrupts": "Addressing the assistant: a question, an objection, a correction, a wish, or saying stop/wait",
-        "listens": "Only a short listening signal like mhm, yes, right, okay, or a laugh",
-        "other": "Talking to another person, or it is background (radio, TV)",
-    },
-}
-
-
-def _texts(lang: str) -> dict:
-    return TEXTS.get(lang, TEXTS["en"])
-
-
-def finished_q(lang: str) -> dict:
-    return {"f": {"type": "noul", "instructions": _texts(lang)["finished"]}}
-
-
-def barge_q(lang: str) -> dict:
-    t = _texts(lang)
-    return {"art": {"type": "choice", "instructions": t["barge_q"], "criteria": {
-        "interrupts": t["interrupts"], "listens": t["listens"], "other": t["other"]}}}
-
-
 _session = None
 
 
@@ -137,10 +99,11 @@ def is_echo(heard: str, said: str) -> bool:
 
 
 class Ear:
-    """One per WebSocket. transcribe(wav, fast) -> (text, lang); decide(state, questions) -> the decider's answers;
-    decider_ok() -> bool; log(str)."""
-    def __init__(self, ws, transcribe, decide, decider_ok, log, lang: str = "de"):
-        self.ws, self.transcribe, self.decide, self.decider_ok, self.log = ws, transcribe, decide, decider_ok, log
+    """One per WebSocket. transcribe(wav, fast) -> (text, lang); decider: see decider.py (finished, barge, ok);
+    log(str)."""
+    def __init__(self, ws, transcribe, decider, log, lang: str = "de"):
+        self.ws, self.transcribe, self.decider, self.log = ws, transcribe, decider, log
+        self.decider_ok = decider.ok
         self.lang = lang                       # the language last heard (the decider's questions in the same language)
         self.vad = Vad()
         self.mode = "listening"
@@ -273,8 +236,7 @@ class Ear:
             finished = None
             if self.decider_ok() and text.strip() and not JUNK.fullmatch(text):
                 try:
-                    r = await asyncio.to_thread(self.decide, _texts(lang)["said"].format(t=text), finished_q(lang))
-                    finished = r["answers"]["f"]["noul"] >= 0.6
+                    finished = await asyncio.to_thread(self.decider.finished, text, lang)
                 except Exception:
                     finished = None
             if gen != self.gen:
@@ -338,17 +300,19 @@ class Ear:
                 await self.send(e="resume")
                 return self.reset()
             words = _words(text)
+            long = len(words) >= 4 and self.voiced >= 1000
             if BACKCHANNEL.fullmatch(text.strip()):
                 verdict = "listens"
-            elif len(words) >= 4 and self.voiced >= 1000:
-                verdict = "interrupts"
             elif self.decider_ok():
                 try:
-                    r = await asyncio.to_thread(self.decide, _texts(lang)["barge_state"].format(said=said[-400:], t=text),
-                                                barge_q(lang))
-                    verdict = r["answers"]["art"]["choice"]
+                    p = await asyncio.to_thread(self.decider.barge, said, text, lang)
+                    verdict = max(p, key=p.get)
+                    if long and not (verdict == "other" and p["other"] >= 0.8):
+                        verdict = "interrupts"   # a longer turn: only a clear "talking to someone else" lets it go on
                 except Exception:
                     verdict = "interrupts"
+            elif long:
+                verdict = "interrupts"
             else:
                 verdict = "interrupts" if len(words) >= 2 else "listens"
             if gen != self.gen or self.barge != "deciding":
@@ -375,15 +339,15 @@ class Ear:
         await self.send(e="barge")
 
 
-async def serve(ws, transcribe, decide, decider_ok, log, lang="de"):
+async def serve(ws, transcribe, decider, log, lang="de"):
     """Run one WebSocket (already accepted) until it closes."""
     if not MODEL.exists():
         await ws.send_text(json.dumps({"e": "err", "text": "models/silero_vad.onnx missing"}))
         return await ws.close()
-    ok = await asyncio.to_thread(decider_ok)
-    ear = Ear(ws, transcribe, decide, decider_ok, lambda m: log(f"[ear] {m}"), lang)
+    ok = await asyncio.to_thread(decider.ok)
+    ear = Ear(ws, transcribe, decider, lambda m: log(f"[ear] {m}"), lang)
     await ear.send(e="ready", decider=ok, clef=ok)   # clef: old name
-    log("[ear] connected" + (" (with the decider)" if ok else " (without the decider)"))
+    log("[ear] connected" + (f" (decider: {decider.name})" if ok else " (without a decider: rules)"))
     try:
         while True:
             msg = await ws.receive()

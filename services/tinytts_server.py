@@ -251,6 +251,15 @@ def _english(language: str) -> bool:
     return bool(EN_URL) and (language or "").lower().startswith("en")
 
 
+def _en_speaker(speaker: str) -> str:
+    """The English voice for a German one: Phonon ids stay, f2/m2 (with accent suffixes) become Annika/Henrik."""
+    vid = (speaker or "").lower()
+    if vid in ALIASES:
+        return vid
+    voice = VOICES.get(vid, VOICES[DEFAULT])[1]
+    return "henrik" if voice.upper().startswith("M") else "annika"
+
+
 def _forward(path: str, form: dict):
     import httpx
     return httpx.post(EN_URL.rstrip("/") + path, data=form, timeout=120)
@@ -260,7 +269,7 @@ def _forward(path: str, form: dict):
 def speak(text: str = Form(...), speaker: str = Form(DEFAULT), language: str = Form("de"), instruct: str = Form(""),
           mix: str = Form(""), temperature: float = Form(0.7), accent: str = Form("")):
     if _english(language):
-        r = _forward("/speak", {"text": text, "speaker": speaker, "language": language})
+        r = _forward("/speak", {"text": text, "speaker": _en_speaker(speaker), "language": language})
         return Response(r.content, status_code=r.status_code, media_type=r.headers.get("content-type", "audio/wav"))
     parts = list(_chunks(text, speaker, accent))
     if not parts:
@@ -276,7 +285,8 @@ def speak_stream(text: str = Form(...), speaker: str = Form(DEFAULT), language: 
 
         def relay():
             with httpx.stream("POST", EN_URL.rstrip("/") + "/speak_stream",
-                              data={"text": text, "speaker": speaker, "language": language}, timeout=120) as r:
+                              data={"text": text, "speaker": _en_speaker(speaker), "language": language},
+                              timeout=120) as r:
                 yield from r.iter_lines()
         return StreamingResponse((line + "\n" for line in relay() if line), media_type="application/x-ndjson")
 

@@ -26,7 +26,7 @@ import httpx
 from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from . import clients, config, ear
+from . import clients, config, decider, ear
 from .speech import Splitter
 
 app = FastAPI(title="flash-voice")
@@ -79,7 +79,7 @@ def info(request: Request):
     ok = session_ok(request.cookies.get(COOKIE))
     return {"auth": bool(config.PASSWORD), "ok": ok, "langs": config.LANGS,
             "library": bool(clients.tts_health().get("library")) if ok else False,
-            "voice": config.VOICE, "decider": clients.decider_ok(), "clef": clients.decider_ok(), "model": clients.model_name() if session_ok(
+            "voice": config.VOICE, "decider": (decider.get().name if decider.get().ok() else False), "clef": decider.get().ok(), "model": clients.model_name() if session_ok(
                 request.cookies.get(COOKIE)) else ""}
 
 
@@ -154,7 +154,7 @@ async def ear_ws(ws: WebSocket):
         await ws.close(code=4401)
         return
     await ws.accept()
-    await ear.serve(ws, clients.transcribe, clients.decide, clients.decider_ok, log, config.LANGS[0])
+    await ear.serve(ws, clients.transcribe, decider.get(), log, config.LANGS[0])
 
 
 # ---------------------------------------------------------------- one turn: the LLM's answer, spoken sentence by sentence

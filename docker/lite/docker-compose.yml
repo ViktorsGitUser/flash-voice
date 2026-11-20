@@ -1,0 +1,43 @@
+# Open WebUI with a voice: docker compose up -d, then open http://localhost:3000
+# (already running Open WebUI? start only flash-voice-lite and enter its URL in Admin -> Settings -> Audio)
+services:
+  flash-voice-lite:
+    build:
+      context: https://github.com/ViktorsGitUser/flash-voice.git#main
+      dockerfile: docker/lite/Dockerfile
+    restart: unless-stopped
+    environment:
+      - FV_THREADS=4             # CPU threads per part
+      - FV_TINYTTS_ACCENT=0      # German voice: 0 = Hochdeutsch ... 1.6 = Austrian accent
+    volumes:
+      - flash-voice-models:/models
+    ports:
+      - "8090:8090"              # optional: for other apps on this computer
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    depends_on: [flash-voice-lite]
+    ports:
+      - "3000:8080"
+    environment:
+      # point these at your LLM (Ollama on this computer, or any OpenAI-compatible API)
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # voice and ears from flash-voice-lite (only applied on the first start; later: Admin -> Settings -> Audio)
+      - AUDIO_TTS_ENGINE=openai
+      - AUDIO_TTS_OPENAI_API_BASE_URL=http://flash-voice-lite:8090/v1
+      - AUDIO_TTS_OPENAI_API_KEY=none
+      - AUDIO_TTS_MODEL=tts-1
+      - AUDIO_TTS_VOICE=m2
+      - AUDIO_STT_ENGINE=openai
+      - AUDIO_STT_OPENAI_API_BASE_URL=http://flash-voice-lite:8090/v1
+      - AUDIO_STT_OPENAI_API_KEY=none
+      - AUDIO_STT_MODEL=whisper-1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - open-webui:/app/backend/data
+
+volumes:
+  flash-voice-models:
+  open-webui:

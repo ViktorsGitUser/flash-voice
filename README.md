@@ -10,7 +10,10 @@ OpenAI-compatible model (Ollama, llama.cpp, vLLM, LM Studio, OpenAI, OpenRouter 
   something, it stops and hears you **from your first syllable**.
 - **It knows when you are done:** at the first short pause the decider asks "is the thought finished?".
   "What's the weather tomorrow in Vienna?" → the answer starts right away. "I'd like, uhm …" → it waits.
-- **Fast:** the answer is spoken sentence by sentence while the LLM is still writing.
+- **Small:** the whole voice stack runs in **~1.2 GB of GPU memory, or on the CPU alone** – the decider is
+  [flash-turn](https://huggingface.co/apptor/flash-turn), a 73 MB model that answers in ~11 ms on one CPU core.
+- **Voice chat for Open WebUI:** one `docker compose up` gives [Open WebUI](https://github.com/open-webui/open-webui)
+  a voice and ears, CPU only ([below](#open-webui-voice-chat-in-one-command)).
 - **Local and free to use:** every part is Apache 2.0, MIT or CC BY. Nothing is stored on the server; the conversation
   lives in your browser.
 
@@ -22,24 +25,23 @@ LLM itself is not counted here: it can run anywhere (same machine, another one, 
 | Part | Choice | GPU memory | Notes |
 |---|---|---|---|
 | **Page + ear** (always) | flash-voice, Silero VAD | – | Python, CPU only |
-| **Ears** (speech → text) | [Fluid Speech Pro](https://huggingface.co/FluidVoice-Labs/fluid-speech-pro) q8_0 | **~1.2 GB** | German, English, Croatian; ~30 ms per sentence; fewest errors in our test |
-| | Fluid Speech Pro int8 on the CPU | – | same model, ~0.9 s per sentence |
+| **Decider** | [flash-turn](https://huggingface.co/apptor/flash-turn) (default) | – | English + German, 73 MB, ~11 ms on one CPU core |
+| | vllm-d3-mini 4B (optional) | ~5 GB | the big one |
+| **Ears** (speech → text) | [Fluid Speech Pro](https://huggingface.co/FluidVoice-Labs/fluid-speech-pro) q8_0 | **~1.2 GB** | English, German, Croatian; ~30 ms per sentence; fewest errors in our test |
+| | Fluid Speech Pro int8 on the CPU | – | same model, ~1.4 s per sentence on 4 cores |
 | | Whisper large-v3-turbo | ~1.2 GB | ~100 languages, ~0.4 s per sentence |
-| **Voice** (text → speech) | [apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts-at) | – | German (also with an Austrian accent), 21 MB, CPU, ~40x real time |
-| | Phonon | – | German + English, CPU (German model non-commercial) |
+| **Voice** (text → speech) | **lite**: Phonon English + [apptor-tiny-tts](https://huggingface.co/apptor/apptor-tiny-tts-at) German | – | CPU, ~0.5 s per sentence; German also with an Austrian accent |
 | | Qwen3-TTS 1.7B | ~4.6 GB | 10 languages, best sound, voice cloning |
-| **Decider** (optional) | vllm-d3-mini 4B | ~5 GB | knows "finished?" and "interruption or just mhm?"; without it simple rules decide |
 
 **Packages:**
 
 | Package | Parts | GPU memory | Start |
 |---|---|---|---|
-| **Tiny** | Fluid + apptor-tiny-tts, rules | **~1.2 GB** (or none, ears on the CPU) | `TTS=tiny STT=fluid NO_DECIDER=1` |
-| **Smart** | Tiny + the decider | ~6 GB | `TTS=tiny STT=fluid` |
-| **Full** | Qwen3-TTS + Fluid or Whisper + the decider | ~11 GB | `STT=fluid` (or nothing: Whisper) |
+| **Lite** | Fluid + lite voice + flash-turn | **~1.2 GB** – or **none** with the ears on the CPU | `TTS=lite STT=fluid` |
+| **Full** | Qwen3-TTS + Fluid (or Whisper) + flash-turn | ~6 GB | `STT=fluid` |
+| **Open WebUI** | Fluid (CPU) + lite voice in one container | none, ~1 GB RAM | `docker compose up -d` |
 
-The page and the ear work the same in every package. What you gain with the bigger ones: the decider waits for
-"I'd like, uhm …" and does not stop for "mhm" or for a sentence to someone else in the room; the Qwen voice sounds
+The page, the ear and the decider work the same in every package. What the Full package adds: the Qwen voice sounds
 more natural, speaks more languages and can clone voices.
 
 ## How it works
@@ -55,9 +57,9 @@ more natural, speaks more languages and can clone voices.
               └──────────────────────────────────── └────────────────────────────────────────────┘
                                                         │ voice :8086       │ ears :8087       │ decider :8088
                                                         ▼                   ▼                  ▼
-                                                    tiny-tts    CPU     Fluid    1.2 GB    vllm-d3-mini 5 GB
-                                                    Phonon      CPU     Whisper  1.2 GB    optional, else
-                                                    Qwen3   4.6 GB                         simple rules
+                                                    lite        CPU     Fluid    1.2 GB    flash-turn   CPU
+                                                    Qwen3   4.6 GB      Whisper  1.2 GB    or vllm-d3-mini
+                                                                                           ~5 GB, or rules
 ```
 
 | Moment | What happens | Time |
@@ -68,12 +70,39 @@ more natural, speaks more languages and can clone voices.
 | … it was "mhm" / echo / noise | ears + rules + decider → full volume again | ~1 s |
 | … it was an interruption | decider: interruption → it stops and listens on | ~1.5 s after you started |
 
-The decider ([vllm-d3-mini](https://huggingface.co/vllm-sr/d3-mini), Apache 2.0, 4B; until November 2026
-[Cloudflare clef-flash](https://huggingface.co/Cloudflare/clef-flash), 9B) is not a chat model: it gets a text and
-questions with fixed answers and returns a probability for each, in ~35 ms on the GPU. Two questions are asked – *is
-the thought finished?* (yes/no) and *what is the person doing while the assistant speaks?* (interrupting / just
-listening / talking to someone else). In tests: "mhm" → 96 % listening, "wait, stop" → 96 % interrupting. Without the
-decider, simple rules take over: 1.1 s of silence ends your turn, and words that are not "mhm", "yes" … interrupt.
+The decider answers two questions: *is the thought finished?* and *what is the person doing while the assistant
+speaks?* (interrupting / just listening / talking to someone else). By default it is
+[flash-turn](https://huggingface.co/apptor/flash-turn), see [The decider](#the-decider). Without any decider, simple
+rules take over: 1.1 s of silence ends your turn, and words that are not "mhm", "yes" … interrupt.
+
+## Open WebUI: voice chat in one command
+
+flash-voice lite is a small container that gives [Open WebUI](https://github.com/open-webui/open-webui) a voice and
+ears – English and German, CPU only, no GPU, ~1 GB of RAM. It speaks the OpenAI audio API, which Open WebUI already
+understands: no plugin to install, nothing to configure by hand.
+
+```bash
+curl -O https://raw.githubusercontent.com/ViktorsGitUser/flash-voice/main/docker/lite/docker-compose.yml
+docker compose up -d          # then open http://localhost:3000 and press the headset button in a chat
+```
+
+The compose file starts Open WebUI already wired to it (and to Ollama on your computer – change `OLLAMA_BASE_URL` or
+add an OpenAI-compatible API in Open WebUI's settings). **Already running Open WebUI?** Start only the voice:
+
+```bash
+docker build -t flash-voice-lite -f docker/lite/Dockerfile https://github.com/ViktorsGitUser/flash-voice.git#main
+docker run -d --name flash-voice-lite --restart unless-stopped -p 8090:8090 -v flash-voice-models:/models flash-voice-lite
+```
+
+and in Open WebUI: *Admin Panel → Settings → Audio*: speech-to-text engine **OpenAI**, URL
+`http://<host>:8090/v1`, key `none`, model `whisper-1`; text-to-speech engine **OpenAI**, same URL and key, model
+`tts-1`, voice `m2` (or `f2`; `m2-at` for the Austrian accent). Then the microphone button transcribes, the speaker
+button reads answers aloud and the headset button starts a hands-free call.
+
+Measured on 4 CPU cores: a sentence is spoken after ~0.3 s (German) / ~0.5–0.9 s (English) and recognised in
+~1.4 s; the container needs ~0.9 GB of RAM, the models ~1 GB of disk (downloaded on the first start). Open WebUI's
+call mode has its own, simpler turn-taking; the interruptions and the decider described here are in flash-voice's own
+page. The same API works for any app that speaks the OpenAI audio API (`services/openai_audio.py`).
 
 ## Plug it into your own setup
 
@@ -124,17 +153,18 @@ cmake --build parakeet.cpp/build --target parakeet -j
 .venv-stt/bin/pip install huggingface_hub && .venv-stt/bin/hf download FluidVoice-Labs/fluid-speech-pro-gguf fluid-speech-pro-q8_0.gguf --local-dir models
 #   Whisper needs nothing more (downloaded on the first start, ~1.6 GB)
 
+# the decider: flash-turn (73 MB, CPU)
+.venv/bin/pip install huggingface_hub && .venv/bin/hf download apptor/flash-turn --local-dir models/flash-turn
+
 # the voice - one of:
-#   apptor-tiny-tts (German, CPU, no torch)
-python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub
-.venv-tinytts/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models
-#   Phonon (German + English, CPU)
-python -m venv .venv-phonon && .venv-phonon/bin/pip install -r services/requirements-phonon.txt
+#   lite: Phonon English + apptor-tiny-tts German (CPU, no torch; the same environment as the Open WebUI container)
+python -m venv .venv-lite && .venv-lite/bin/pip install -r docker/lite/requirements.txt
+.venv-lite/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models
 #   Qwen3-TTS (GPU, torch; the model is downloaded on the first start, ~4 GB)
 python -m venv .venv-tts && .venv-tts/bin/pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 .venv-tts/bin/pip install -r services/requirements-tts.txt
 
-# the decider (optional): llama.cpp's llama-server (b11719 or newer) + the model (~5 GB)
+# optional, instead of flash-turn: the big decider in llama.cpp's llama-server (b11719 or newer), ~5 GB GPU
 .venv-stt/bin/hf download ggml-org/vllm-d3-mini-GGUF vllm-d3-mini-Q8_0.gguf --local-dir models
 ```
 
@@ -143,16 +173,16 @@ On Windows use `.venv-tts\Scripts\pip` etc.
 ## Start
 
 ```bash
-TTS=tiny STT=fluid NO_DECIDER=1 scripts/start-all.sh                       # Tiny
-TTS=tiny STT=fluid LLAMA_SERVER=/path/to/llama-server scripts/start-all.sh # Smart
-STT=fluid LLAMA_SERVER=/path/to/llama-server scripts/start-all.sh          # Full (without STT=: Whisper)
-# Windows: scripts\start-all.bat with the same variables (set TTS=tiny etc.)
+TTS=lite STT=fluid scripts/start-all.sh                                 # Lite
+STT=fluid scripts/start-all.sh                                          # Full (without STT=: Whisper)
+FV_DECIDER=llm LLAMA_SERVER=/path/to/llama-server scripts/start-all.sh  # with the big decider
+# Windows: scripts\start-all.bat with the same variables (set TTS=lite etc.)
 ```
 
-`TTS` = `tiny` | `phonon` | `qwen` (default), `STT` = `fluid` | `whisper` (default), `NO_DECIDER=1` without the
-decider. The script uses the environments above when they exist (`TTS_PY`, `STT_PY`, `FV_PY` to point elsewhere).
-Open the page, tap the microphone, talk. Tap the orb to interrupt by hand. Settings (top right): voice, interrupt by
-voice on/off, theme, clear the conversation.
+`TTS` = `lite` | `qwen` (default) | `phonon`, `STT` = `fluid` | `whisper` (default), `FV_DECIDER` = `auto` (default:
+flash-turn when `models/flash-turn` is there) | `mini` | `llm` | `rules`. The script uses the environments above when
+they exist (`TTS_PY`, `STT_PY`, `FV_PY` to point elsewhere). Open the page, tap the microphone, talk. Tap the orb to
+interrupt by hand. Settings (top right): voice, interrupt by voice on/off, theme, clear the conversation.
 
 ## The parts in detail
 
@@ -221,10 +251,31 @@ style), `mix` (preview a mixture) and `temperature`. Labels: a voice's `name.jso
 
 ### The decider
 
-`scripts/start-decider.sh` runs vllm-d3-mini in llama.cpp's `llama-server` (b11719 or newer: it has the
-`/v1/systemone` endpoint and knows d3-mini's decision format), text only, ~5 GB of VRAM (`LLAMA_SERVER`,
-`DECIDER_GGUF`). flash-voice asks it at `FV_DECIDER_URL` (empty = rules only; the old names `FV_CLEF_URL`,
-`NO_CLEF` and `CLEF_GGUF` still work).
+**flash-turn** (default, [apptor/flash-turn](https://huggingface.co/apptor/flash-turn), Apache 2.0): one small text
+model for both questions, English and German. Built on distilbert-base-multilingual-cased (vocabulary cut to English +
+German), fine-tuned on ~2.8 million German and ~2 million English sentences (whole = finished, cut after a word = not
+finished) and ~21,000 interjections while an assistant speaks (written by a local LLM and checked by vllm-d3-mini, plus
+people addressed by name). ONNX int8, 73 MB, ~11 ms per question on one CPU thread – no GPU.
+
+Measured on test sets never used in training; vllm-d3-mini asked the way flash-voice asks it (Q8_0, llama-server):
+
+| Test | flash-turn | vllm-d3-mini |
+|---|---|---|
+| End of turn, decider test cases (English / German, 24 each) | 23 / 23 | 24 / 23 |
+| Interjections, decider test cases (English / German, 28 each) | **26 / 25** | 24 / 18 |
+| End of turn, 300 clips of Austrian speakers (speech recognition text) | **92.3 %** | 87.0 % |
+| End of turn, unseen sentences (English / German) | 91.5 % / 91.0 % | 90.7 % / 90.7 % |
+| Time per question | **11 ms on 1 CPU thread** | ~35 ms on a GPU |
+| Size | **73 MB** | ~5 GB |
+
+The ear asks it at every first pause and every interjection. Longer interjections (4+ words) still stop the assistant
+unless flash-turn is very sure (≥ 80 %) that they are meant for someone else – it rather stops once too often than
+talks over you. A wrong "not finished" only costs time: the ear then waits up to 1.8 s of silence instead of 1.1 s.
+
+**vllm-d3-mini** (optional, `FV_DECIDER=llm`): a 4B decision model in llama.cpp's `llama-server` (b11719 or newer: it
+has the `/v1/systemone` endpoint and knows d3-mini's decision format), ~5 GB of GPU memory, ~35 ms.
+`scripts/start-decider.sh` runs it (`LLAMA_SERVER`, `DECIDER_GGUF`); flash-voice asks it at `FV_DECIDER_URL`. The old
+names `FV_CLEF_URL`, `NO_CLEF` and `CLEF_GGUF` still work.
 
 ## The microphone needs https
 
@@ -249,7 +300,8 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
 | `FV_LLM_MODEL` / `FV_LLM_KEY` | – | empty model = the first the endpoint lists |
 | `FV_LLM_EXTRA` | – | JSON added to each request, e.g. `{"temperature":0.7}`; thinking models: switch thinking off for speed (e.g. Qwen3 `{"chat_template_kwargs":{"enable_thinking":false}}`) |
 | `FV_SYSTEM_PROMPT` | built-in | `{date}` = today |
-| `FV_TTS_URL` / `FV_STT_URL` / `FV_DECIDER_URL` | `:8086` / `:8087` / `:8088` | decider empty = rules only |
+| `FV_DECIDER` | `auto` | `mini` (flash-turn) / `llm` (vllm-d3-mini) / `rules`; auto = mini if `models/flash-turn` is there |
+| `FV_TTS_URL` / `FV_STT_URL` / `FV_DECIDER_URL` | `:8086` / `:8087` / `:8088` | the big decider's URL (`FV_DECIDER=llm`) |
 | `FV_LANGS` | `en,de` | what the ears choose from; the decider's questions follow the language heard |
 | `FV_VOICE` | `serena` | a voice id of the voice service (unknown ids: its default voice) |
 | `FV_HOST` / `FV_PORT` | `127.0.0.1` / `8099` | |
@@ -260,9 +312,10 @@ In the car over Bluetooth the car does the echo cancellation – that is where i
 
 - While a GPU voice is still generating, the ears share the GPU with it: an interruption is then confirmed in
   ~1.5–3 s instead of ~1 s (the volume goes down right away regardless). With a CPU voice this does not happen.
-- A sentence to someone else in the room ("could you pass the water?") was often taken for an interruption by
-  clef-flash; d3-mini got all such test sentences right (14 of 14 interruption cases, clef-flash 10 of 14). When in
-  doubt it still rather stops once too often than talks over you. Without the decider this is the rules' weak spot.
+- Whether a sentence is meant for someone else in the room is often impossible to tell from the words alone
+  ("could you pass the water?"). Clear cases (a name or "honey", the TV, a sports commentator) are recognised; when in
+  doubt it rather stops once too often than talks over you.
+- flash-turn knows English and German; in other languages the pause rules decide.
 - The page keeps the conversation in the browser (last 60 messages). There are no tools, files or memory – this is the
   voice, bring your own brain.
 

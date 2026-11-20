@@ -51,7 +51,7 @@ def main():
               "use your LLM and microphone page", flush=True)
     scheme = "https" if ssl else "http"
     print(f"[flash-voice] {scheme}://{config.HOST}:{config.PORT}/  LLM {config.LLM_URL}  TTS {config.TTS_URL}  "
-          f"STT {config.STT_URL}  decider {config.DECIDER_URL or '-'}", flush=True)
+          f"STT {config.STT_URL}  decider {config.DECIDER}", flush=True)
     uvicorn.run("flashvoice.app:app", host=config.HOST, port=config.PORT, log_level="warning", **ssl)
 
 

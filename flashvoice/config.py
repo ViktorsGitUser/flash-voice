@@ -30,6 +30,8 @@ TTS_URL = E("FV_TTS_URL", "http://127.0.0.1:8086").rstrip("/")
 STT_URL = E("FV_STT_URL", "http://127.0.0.1:8087").rstrip("/")
 # the decider (a small decision model in llama-server); empty or unreachable: simple rules instead. FV_CLEF_URL: old name
 DECIDER_URL = E("FV_DECIDER_URL", E("FV_CLEF_URL", "http://127.0.0.1:8088")).rstrip("/")
+DECIDER = E("FV_DECIDER", "auto")                 # auto | mini | llm | rules (see decider.py)
+TURN_MODEL = E("FV_TURN_MODEL", str(ROOT / "models" / "flash-turn"))   # the mini decider's folder
 LANGS = tuple(x.strip() for x in E("FV_LANGS", "en,de").split(",") if x.strip())
 VOICE = E("FV_VOICE", "serena")
 # the page

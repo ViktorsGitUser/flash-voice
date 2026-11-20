@@ -11,7 +11,10 @@ Models (downloaded on first use)
   Fluid Speech Pro (optional)                FluidVoice            CC BY 4.0
       Fluid Speech Pro by FluidVoice. Built on NVIDIA Parakeet TDT 0.6B v3 and Moondream Parakeet Ultra.
       huggingface.co/FluidVoice-Labs/fluid-speech-pro
-  vllm-d3-mini, the decider (GGUF ggml-org)  vllm-sr               Apache-2.0
+  flash-turn, the mini decider               this project (apptor)  Apache-2.0 (huggingface.co/apptor/flash-turn)
+      built on distilbert-base-multilingual-cased (Apache-2.0); trained on Mozilla Common Voice German sentences
+      (CC0) and Tatoeba sentences (CC BY 2.0 FR, tatoeba.org)
+  vllm-d3-mini, the big decider (optional)   vllm-sr               Apache-2.0
   Phonon phonon-31m-en (optional)            Gradium               Apache-2.0
   Phonon phonon-40m-de (optional)            Gradium               CC BY-NC 4.0 (non-commercial only)
   apptor-tiny-tts German / Austrian (opt.)   this repository       Apache-2.0 (huggingface.co/apptor/apptor-tiny-tts, -at)
@@ -30,7 +33,7 @@ Included
 
 Libraries
   faster-qwen3-tts (MIT), qwen-tts-hf (Apache-2.0), transformers (Apache-2.0), PyTorch (BSD-3-Clause),
-  faster-whisper (MIT), CTranslate2 (MIT), parakeet.cpp (MIT, optional), onnx-asr (MIT, optional), onnxruntime (MIT), llama.cpp (MIT), FastAPI (MIT), Starlette (BSD-3-Clause),
+  faster-whisper (MIT), CTranslate2 (MIT), parakeet.cpp (MIT, optional), onnx-asr (MIT, optional), tokenizers (Apache-2.0), PyAV (BSD-3-Clause), onnxruntime (MIT), llama.cpp (MIT), FastAPI (MIT), Starlette (BSD-3-Clause),
   Uvicorn (BSD-3-Clause), httpx (BSD-3-Clause), websockets (BSD-3-Clause), NumPy (BSD-3-Clause),
   soundfile (BSD-3-Clause), cryptography (Apache-2.0 or BSD-3-Clause), librosa (ISC), ptts (MIT or Apache-2.0),
   num2words (LGPL-2.1, apptor-tiny-tts voice). The apptor-tiny-tts voice needs no eSpeak NG; only with FV_TINYTTS_G2P=espeak

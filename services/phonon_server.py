@@ -35,6 +35,8 @@ QUANT = os.environ.get("FV_PHONON_QUANT", "q8")
 THREADS = int(os.environ.get("FV_PHONON_THREADS", "4"))   # 16 by default: took the CPU from Strata (its experts)
 MODELS = {"de": os.environ.get("FV_PHONON_DE", "hf://gradium/phonon-40m-de"),
           "en": os.environ.get("FV_PHONON_EN", "hf://gradium/phonon-31m-en")}
+# FV_PHONON_LANGS=en: only the English model (Apache 2.0, no Hugging Face token needed)
+MODELS = {l: MODELS[l] for l in os.environ.get("FV_PHONON_LANGS", "de,en").split(",") if l in MODELS}
 SR = 24000
 PIECE_S = 0.5   # stream pieces of about this length
 if not os.environ.get("HF_TOKEN") and os.environ.get("FV_HF_TOKEN_FILE"):
@@ -73,7 +75,8 @@ def _voice(speaker: str, lang: str) -> str:
 
 
 def _lang(language: str) -> str:
-    return "en" if (language or "").lower().startswith("en") else "de"
+    lang = "en" if (language or "").lower().startswith("en") else "de"
+    return lang if lang in _tts else next(iter(_tts))
 
 
 def _wav(audio: np.ndarray) -> bytes:

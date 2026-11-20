@@ -72,7 +72,7 @@ Modell. Installation:
 `python -m venv .venv-tinytts && .venv-tinytts/bin/pip install -r services/requirements-tinytts.txt huggingface_hub`, Modelle: `.venv-tinytts/bin/hf download apptor/apptor-tiny-tts-at apptor-tiny-tts-at.onnx apptor-tiny-tts-at.json apptor-g2p-de.onnx apptor-g2p-de.json apptor-vocos-de.int8.onnx --local-dir models`, Start:
 `FV_TINYTTS_MODEL=models/apptor-tiny-tts-at.onnx .venv-tinytts/bin/python services/tinytts_server.py` (Port 8089), dann `FV_TTS_URL=http://127.0.0.1:8089`.
 
-**Österreichischer Akzent** (apptor-tiny-tts-at, v0.1, noch dezent): die Stimmen `f2-de`/`m2-de` sprechen Hochdeutsch,
+**Österreichischer Akzent** (apptor-tiny-tts-at, v0.2, noch dezent): die Stimmen `f2-de`/`m2-de` sprechen Hochdeutsch,
 `-at` mit Akzent 1,0, `-wien` 1,3, `-oarg` 1,6; `f2`/`m2` nehmen `FV_TINYTTS_ACCENT` (Standard 1,3). Das Formularfeld
 `accent` (0 bis 1,6) überschreibt das pro Anfrage.
 
@@ -81,6 +81,19 @@ Ausgabe für einen deutlich saubereren Klang neu. Sie ist automatisch an, wenn `
 (ONNX, kein torch, ~0,1 s pro Satz); `FV_TINYTTS_VOCOS=` (leer) schaltet sie ab. Die ältere PyTorch-Version
 (`=models/apptor-tiny-tts-vocos-de.pt` oder `=pretrained`) braucht torch und `services/requirements-tinytts-vocos.txt`.
 Mit `FV_TINYTTS_G2P=espeak` wird statt des Aussprache-Modells das Programm espeak-ng verwendet.
+
+## Optional: Fluid Speech Pro statt Whisper (Deutsch, Englisch, Kroatisch)
+
+`services/fluid_stt_server.py` spricht dieselbe Schnittstelle (`/api/stt`, `/api/words`) mit
+[Fluid Speech Pro](https://huggingface.co/FluidVoice-Labs/fluid-speech-pro) von FluidVoice (CC BY 4.0, 0,6 Mrd. Parameter,
+auf Basis von NVIDIA Parakeet TDT 0.6B v3). Auf Common Voice Deutsch macht es weniger Fehler als Whisper
+large-v3-turbo (Wortfehlerrate 6,4 % statt 7,9 % bei Sprechern aus Deutschland, 5,2 % statt 6,9 % mit österreichischem
+Akzent) und ist viel schneller: ~30 ms pro Satz auf der Grafikkarte mit ~1,2 GB VRAM, über
+[parakeet.cpp](https://github.com/mudler/parakeet.cpp) (MIT) und die q8_0-GGUF-Datei. Das Modell meldet die Sprache
+nicht; der Server wählt sie anhand der erkannten Wörter aus `langs`. Nur diese drei Sprachen, kein `auto`.
+Einrichtung (libparakeet.so mit `-DPARAKEET_SHARED=ON -DGGML_CUDA=ON` bauen, GGUF nach `models/`) steht in der englischen
+README. Ohne Grafikkarte: `FV_FLUID_BACKEND=onnx` mit dem int8-ONNX-Export, ~0,9 s pro Satz auf vier CPU-Threads.
+Fluid Speech Pro steht unter CC BY 4.0, nicht Apache: beim Weitergeben die Namensnennung (siehe NOTICE) mitliefern.
 
 ## Das Mikrofon braucht https
 

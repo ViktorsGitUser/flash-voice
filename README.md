@@ -133,7 +133,7 @@ FV_TINYTTS_MODEL=models/apptor-tiny-tts-at.onnx .venv-tinytts/bin/python service
 FV_TTS_URL=http://127.0.0.1:8089 ...                       # point flash-voice at it
 ```
 
-**Austrian accent** (apptor-tiny-tts-at, v0.1, still mild): the voice ids `f2-de`/`m2-de` speak Hochdeutsch, `-at` with
+**Austrian accent** (apptor-tiny-tts-at, v0.2, still mild): the voice ids `f2-de`/`m2-de` speak Hochdeutsch, `-at` with
 accent 1.0, `-wien` 1.3, `-oarg` 1.6; plain `f2`/`m2` use `FV_TINYTTS_ACCENT` (default 1.3). A form field `accent`
 (0 to 1.6) overrides it per request. `models/apptor-tiny-tts-de.onnx` (from apptor/apptor-tiny-tts) is the plain German model.
 
@@ -183,6 +183,26 @@ becomes a voice, hiss and hum filtered), `/voices/mix` (a weighted mixture of vo
 `temperature`. Labels: a voice's `name.json`, or `names.json` in the folder.
 STT service: `FV_STT_MODEL`, `FV_STT_COMPUTE`, `FV_STT_LANGS`; besides `/api/stt` it has `/api/words` – when each word
 is said, for word-by-word subtitles.
+
+**Optional: Fluid Speech Pro instead of Whisper** (German, English, Croatian). `services/fluid_stt_server.py` speaks the
+same API (`/api/stt`, `/api/words`) with [Fluid Speech Pro](https://huggingface.co/FluidVoice-Labs/fluid-speech-pro)
+by FluidVoice (CC BY 4.0, 0.6B parameters, built on NVIDIA Parakeet TDT 0.6B v3). On Common Voice German it made fewer
+mistakes than Whisper large-v3-turbo (word error rate 6.4 % vs 7.9 % for speakers from Germany, 5.2 % vs 6.9 % with an
+Austrian accent) and is much faster: ~30 ms per sentence on the GPU with ~1.2 GB VRAM, through
+[parakeet.cpp](https://github.com/mudler/parakeet.cpp) (MIT) and the q8_0 GGUF file. The model does not report the
+language; the server picks it from `langs` by the words it recognised. Only the three languages, no `auto`.
+
+```bash
+git clone https://github.com/mudler/parakeet.cpp && cmake -S parakeet.cpp -B parakeet.cpp/build -DPARAKEET_SHARED=ON -DGGML_CUDA=ON
+cmake --build parakeet.cpp/build --target parakeet -j     # libparakeet.so + the ggml libraries next to it
+hf download FluidVoice-Labs/fluid-speech-pro-gguf fluid-speech-pro-q8_0.gguf --local-dir models   # ~0.9 GB
+LD_LIBRARY_PATH=$PWD/parakeet.cpp/build:$PWD/parakeet.cpp/build/third_party/ggml/src:$PWD/parakeet.cpp/build/third_party/ggml/src/ggml-cuda \
+  .venv-stt/bin/python services/fluid_stt_server.py      # port 8087 like Whisper (FV_STT_PORT)
+```
+
+Without a GPU: `FV_FLUID_BACKEND=onnx` with the int8 ONNX export (FluidVoice-Labs/fluid-speech-pro-onnx,
+`FV_FLUID_MODEL=<folder>`, `pip install onnx-asr onnxruntime`), ~0.9 s per sentence on four CPU threads. Fluid Speech Pro is CC BY 4.0, not Apache: keep the attribution
+(see NOTICE) when you ship it.
 
 ## Use it from your own app
 

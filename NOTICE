@@ -8,6 +8,9 @@ It uses, but does not contain, the following models and libraries (each under it
 Models (downloaded on first use)
   Qwen3-TTS 12Hz 1.7B (CustomVoice / Base)   Alibaba Qwen team     Apache-2.0
   Whisper large-v3-turbo                     OpenAI                MIT
+  Fluid Speech Pro (optional)                FluidVoice            CC BY 4.0
+      Fluid Speech Pro by FluidVoice. Built on NVIDIA Parakeet TDT 0.6B v3 and Moondream Parakeet Ultra.
+      huggingface.co/FluidVoice-Labs/fluid-speech-pro
   clef-flash (GGUF by bartowski)             Cloudflare            Apache-2.0
   Phonon phonon-31m-en (optional)            Gradium               Apache-2.0
   Phonon phonon-40m-de (optional)            Gradium               CC BY-NC 4.0 (non-commercial only)
@@ -27,7 +30,7 @@ Included
 
 Libraries
   faster-qwen3-tts (MIT), qwen-tts-hf (Apache-2.0), transformers (Apache-2.0), PyTorch (BSD-3-Clause),
-  faster-whisper (MIT), CTranslate2 (MIT), onnxruntime (MIT), llama.cpp (MIT), FastAPI (MIT), Starlette (BSD-3-Clause),
+  faster-whisper (MIT), CTranslate2 (MIT), parakeet.cpp (MIT, optional), onnx-asr (MIT, optional), onnxruntime (MIT), llama.cpp (MIT), FastAPI (MIT), Starlette (BSD-3-Clause),
   Uvicorn (BSD-3-Clause), httpx (BSD-3-Clause), websockets (BSD-3-Clause), NumPy (BSD-3-Clause),
   soundfile (BSD-3-Clause), cryptography (Apache-2.0 or BSD-3-Clause), librosa (ISC), ptts (MIT or Apache-2.0),
   num2words (LGPL-2.1, apptor-tiny-tts voice). The apptor-tiny-tts voice needs no eSpeak NG; only with FV_TINYTTS_G2P=espeak

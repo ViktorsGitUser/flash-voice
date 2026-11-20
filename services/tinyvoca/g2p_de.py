@@ -30,6 +30,9 @@ EXCEPTIONS = {
     "mathematische": "m a t eː m ɑːˈ t ɪ ʃ ə", "mathematischen": "m a t eː m ɑːˈ t ɪ ʃ ə n",
     "Theorem": "t eː oː r eːˈ m", "Theoreme": "t eː oː r eːˈ m ə", "Logarithmus": "l oː ɡ a r ɪˈ t m ʊ s",
     "Imaginärteil": "ɪ m a ɡ i n ɛːˈ ɾ t aɪˌ l", "imaginär": "ɪ m a ɡ i n ɛːˈ ɾ",
+    # French loan word: sch, not the ch of "ich" (the model said "re-çer-çe")
+    "Recherche": "r eː ʃ ɛˈ ɾ ʃ ə", "Recherchen": "r eː ʃ ɛˈ ɾ ʃ ə n", "recherchieren": "r eː ʃ ɛ ɾ ʃ iːˈ r ə n",
+    "recherchiert": "r eː ʃ ɛ ɾ ʃ iːˈ ɾ t", "recherchiere": "r eː ʃ ɛ ɾ ʃ iːˈ r ə",
     "Helene": "h eː l eːˈ n ə",
     "Diana": "d i aˈ n ɑː",
     "Dianna": "d i aˈ n ɑː",
@@ -237,7 +240,7 @@ AUSTRIAN = {
     # western-Austrian "scht" crept into the accent here; lenis d (as said in Vienna) keeps a clean s
     "Donnerstag": "d ɔˈ n ɐ s d ɑː k", "Donnerstags": "d ɔˈ n ɐ s d ɑː k s",
     "Mathematik": "m a t eː m ɑːˈ t ɪ k", "Spaß": "ʃ p aˈ s", "Geschoss": "ɡ ə ʃ oːˈ s", "Geschoß": "ɡ ə ʃ oːˈ s",
-    "Anis": "ɑːˈ n ɪ s",
+    "Anis": "ɑːˈ n ɪ s", "Recherche": "r eːˈ ʃ ɛ ɾ ʃ ə", "Recherchen": "r eːˈ ʃ ɛ ɾ ʃ ə n",
 }
 
 # compounds ending in these words (Tomatensauce, Geburtsdatum): the first part as the model reads it, then this
@@ -295,8 +298,16 @@ def _kaffee(w, units):
 
 def word(w, austrian=False):
     """One written word -> [(phone, stress), ...]."""
-    units = _kaffee(w, _word(w, austrian))
+    units = _prim(w, _kaffee(w, _word(w, austrian)))
     return _austrian_rules(w, units) if austrian else units
+
+
+def _prim(w, units):
+    """Primzahl, Primfaktor (and compounds) with a long i, as in "prim" (the model said "Primm-zahl")."""
+    if w.lower().startswith(("primzahl", "primfaktor")) and [u for u, _ in units[:3]] == ["p", "ɾ", "ɪ"]:
+        units = list(units)
+        units[2] = ("iː", units[2][1])
+    return units
 
 
 _IG_ICH = re.compile(r"ig(?=$|[^aeiouäöüy])|ich", re.I)
